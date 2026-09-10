@@ -58,6 +58,119 @@ labels must be replaced with the firmware mapping before you wire the board:
 | Relay IN1–IN5 → GPIO25, 26, 27, 32, 33 | Relay IN1–IN5 → **GPIO13, 14, 18, 19, 23** |
 | IR S1–S5 → GPIO13, 14, 18, 19, 23 | IR S1–S5 → **GPIO34, 35, 32, 33, 27** |
 
+## Detailed connection diagrams
+
+The following diagrams are stored in `docs/images` and use the same GPIO map as
+the firmware configuration.
+
+### 1. LCD I2C — GPIO21 / GPIO22
+
+![LCD I2C to ESP32](../docs/images/1.png)
+
+### 2. 4×4 keypad through PCF8574
+
+![4x4 keypad through PCF8574 to ESP32](../docs/images/2.png)
+
+### 3. Coin acceptor — GPIO26
+
+![Coin acceptor to ESP32 GPIO26 through a level shifter](../docs/images/3.png)
+
+### 4. Tamper / vibration sensor — GPIO4
+
+![Tamper vibration sensor to ESP32 GPIO4](../docs/images/4.png)
+
+### 5. Buzzer — GPIO25
+
+![5 volt buzzer using a transistor driver on ESP32 GPIO25](../docs/images/5.png)
+
+### 6. Relay module and vending motors
+
+![Five channel relay module and slot motors](../docs/images/6.png)
+
+The firmware mapping is **IN1 = GPIO13**, **IN2 = GPIO14**, **IN3 = GPIO18**,
+**IN4 = GPIO19**, and **IN5 = GPIO23**. Follow that order even if the visual
+cable routing is hard to read. The diagram applies only to a relay board whose
+inputs accept 3.3 V logic. A typical 5 V relay coil board still needs an external
+5 V VCC supply; do not power relay coils from ESP32 3V3.
+
+### 7. IR drop sensors S1 and S2 — GPIO34 / GPIO35
+
+![IR drop sensors S1 and S2](../docs/images/7.png)
+
+IR S3 and S4 use the same 3.3 V, active-LOW wiring on **GPIO32** and **GPIO33**.
+
+### 8. IR drop sensor S5 — GPIO27
+
+![IR drop sensor S5](../docs/images/9.png)
+
+### 9. SIM800L — GPIO16 / GPIO17
+
+![SIM800L serial connection to ESP32](../docs/images/10.png)
+
+Use the resistor divider or logic-level shifter shown between ESP32 GPIO17 and
+SIM800L RX. Power the SIM800L separately at 4.0–4.2 V with enough current for
+transmit bursts.
+
+## Upload firmware with Arduino IDE
+
+1. Install **Arduino IDE 2.x** from [arduino.cc](https://www.arduino.cc/en/software).
+2. Open **File → Preferences**. In **Additional Boards Manager URLs**, add:
+
+   ```text
+   https://espressif.github.io/arduino-esp32/package_esp32_index.json
+   ```
+
+3. Open **Tools → Board → Boards Manager**, search for `esp32`, then install
+   **esp32 by Espressif Systems**. The firmware was verified using version `2.0.17`.
+4. Open **Sketch → Include Library → Manage Libraries**, then install:
+
+   - `ArduinoJson` version `6.21.5`
+   - `LiquidCrystal I2C` version `1.1.2`
+
+5. In the project folder, run the following command once to create or refresh
+   the private firmware credentials file:
+
+   ```powershell
+   npm run firmware:configure
+   ```
+
+   This creates `firmware/4peace_esp32_firmware/config.local.h`. Confirm that
+   the Wi-Fi SSID is a 2.4 GHz network; ESP32-WROOM-32 cannot join 5 GHz-only
+   Wi-Fi.
+
+6. Connect the ESP32 with a **data-capable USB cable**. Disconnect relay and
+   motor power for the first upload and boot test.
+7. Open this exact sketch in Arduino IDE:
+
+   ```text
+   firmware/4peace_esp32_firmware/4peace_esp32_firmware.ino
+   ```
+
+   Arduino IDE will automatically load the numbered tabs in the same folder.
+8. Select **Tools → Board → esp32 → ESP32 Dev Module**. Under **Tools → Port**,
+   choose the COM port that appears after plugging in the ESP32.
+9. Click **Verify**. A successful build should be close to the previously
+   verified size: about `960,697 bytes` flash and `48,248 bytes` RAM.
+10. Click **Upload**. If it stays on `Connecting...`, hold the board's **BOOT**
+    button until writing begins, then release it. Some ESP32 boards require
+    this manual bootloader step.
+11. Open **Tools → Serial Monitor**, set the speed to **115200 baud**, and press
+    the board **EN/RESET** button once.
+12. Check the startup output. A normal online boot shows messages similar to:
+
+    ```text
+    4Peace Vending — FIXED Firmware Starting
+    [WiFi] Connected: ...
+    [CLOUD] Config=OK Stock=OK Health=OK
+    ```
+
+    `Config=OK`, `Stock=OK`, and `Health=OK` confirm the firmware reached
+    Supabase. If Wi-Fi is unavailable, the device can still boot into local
+    vending mode and retry later.
+13. Reconnect relay and motor power only after the LCD, keypad, Wi-Fi, and
+    Serial Monitor output work correctly. Test one slot at a time before using
+    all five motors.
+
 ## Safety checks before power-on
 
 1. Confirm every ESP32-connected output is 3.3 V or lower. GPIOs are not 5 V tolerant.
