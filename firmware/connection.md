@@ -8,7 +8,7 @@
 > [`4peace_esp32_firmware/config.h`](4peace_esp32_firmware/config.h).
 # 4Peace Workflow
 
-![4Peace ESP32 vending machine workflow overview](../howItWorks.png)
+![4Peace ESP32 vending machine workflow overview](../howItworks.png)
 
 ## Power rails and grounding
 
