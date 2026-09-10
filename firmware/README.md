@@ -72,6 +72,9 @@ ground to ESP32 GND unless an opto-isolated module explicitly requires a
 separate isolated ground. Do not connect a motor, relay coil, SIM800L, or
 coin acceptor power input directly to the ESP32 3.3 V pin.
 
+See [connection.md](connection.md) for the cover wiring diagram, corrected GPIO
+mapping, voltage rails, and pre-power safety checks.
+
 | Device / module pin | ESP32 connection | Module supply | Signal voltage | Connection notes |
 | --- | --- | --- | --- | --- |
 | ESP32 VIN / 5V | Regulated 5 V supply or USB 5 V | 5 V input | — | Use a supply with enough current for the ESP32 and low-power sensors. Motors and SIM800L need their own supply. |
