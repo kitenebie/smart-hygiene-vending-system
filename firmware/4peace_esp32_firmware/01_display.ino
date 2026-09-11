@@ -1,4 +1,4 @@
-// Arduino IDE tab: 01_display.ino
+  // Arduino IDE tab: 01_display.ino
 // Shared globals and declarations are in 4peace_esp32_firmware.ino.
 
 // UI

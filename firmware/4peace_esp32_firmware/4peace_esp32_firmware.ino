@@ -48,6 +48,8 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <esp_system.h>
+#include <esp_heap_caps.h>
+#include <LittleFS.h>
 #include "config.h"
 #include "supabase_ca.h"
 #include <time.h>
@@ -85,6 +87,29 @@ struct PendingTx {
   String method;
   int slotId;
   float amount;
+};
+
+struct DeviceResourceSnapshot {
+  uint32_t internalSramTotalBytes;
+  uint32_t internalSramFreeBytes;
+  uint32_t externalPsramTotalBytes;
+  uint32_t externalPsramFreeBytes;
+  uint32_t externalFlashTotalBytes;
+  uint32_t externalFlashUsedBytes;
+  uint32_t filesystemTotalBytes;
+  uint32_t filesystemUsedBytes;
+  uint32_t romTotalBytes;
+  float cpuTemperatureC;
+};
+
+// A locally-persisted event that must reach the Supabase SMS outbox before
+// the SIM800L is ever allowed to send it. clientEventId makes upload retries
+// idempotent when the ESP32 loses the HTTP response after a successful POST.
+struct SmsEvent {
+  String clientEventId;
+  String eventType;
+  String recipient;
+  String message;
 };
 
 // ============================================================================
@@ -130,11 +155,16 @@ unsigned long stateTimer = 0;
 unsigned long gcashPollTimer = 0;
 unsigned long lastHealthSyncTime = 0;
 unsigned long lastConfigSyncTime = 0;
+unsigned long lastPinMonitorControlTime = 0;
+unsigned long lastPinDiagnosticTime = 0;
 unsigned long lastWiFiRetryTime = 0;
 unsigned long lastTamperAlertTime = 0;
+unsigned long lastSmsProcessTime = 0;
 
 int gsmSignalPct = -1;
 volatile bool motorActive = false;
+bool filesystemMounted = false;
+bool pinConnectionDetectionEnabled = false;
 
 // ============================================================================
 // Interrupt-shared data
@@ -172,6 +202,8 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode);
 bool sensorIsTriggeredStable(int pin, unsigned long stableMs);
 bool waitForNewIrDrop(int pin, unsigned long timeoutMs);
 String makeTransactionId();
+String makeSmsEventId();
+int requiredSmsOutboxSlotsForVend(int slotIdx);
 
 // Persistence
 void loadPersistentStocks();
@@ -180,17 +212,26 @@ bool pendingQueueHasSpace();
 bool hasPendingTransactions();
 bool enqueuePendingTransaction(const PendingTx &tx);
 void syncPendingTransactions();
+bool smsOutboxHasSpace(int requiredSlots = 1);
+bool queueSmsEvent(const String &eventType, const String &message);
+void syncPendingSmsOutbox();
 
 // Networking
 void handleWiFiReconnect();
 bool httpFetchConfig();
+bool httpFetchPinMonitoringState();
 bool httpFetchSlots();
 int httpSubmitGcashPayment(const String &refCode, int slotId, float amount);
 String httpCheckGcashStatus(const String &refCode);
 bool httpCompleteVend(const PendingTx &tx, int &serverStock);
 bool httpSyncDeviceHealth();
+DeviceResourceSnapshot readDeviceResourceSnapshot();
 bool httpLogMachineAlert(const String &level, const String &message);
 bool httpPostNotification(const String &type, const String &level, const String &message);
+bool httpQueueSmsEvent(const SmsEvent &event);
+void httpProcessPendingSms();
+bool httpMarkSmsSent(uint32_t smsId);
+bool httpRecordSmsFailure(uint32_t smsId, int nextAttemptCount, const String &error);
 void addSupabaseHeaders(HTTPClient &http, bool json = false);
 void configureSecureClient(WiFiClientSecure &client);
 
@@ -203,6 +244,8 @@ int gsmGetSignalStrength();
 
 // Diagnostics
 float readRailVoltage(int adcPin, float dividerRatio);
+void runPinConnectionDiagnostics();
+void restorePinDiagnosticOutputs();
 
 // ============================================================================
 // ISR
@@ -246,6 +289,10 @@ void setup() {
 
   // NVS / persistent data
   prefs.begin("4peace", false);
+
+  // Read-only telemetry only. Do not format a missing or invalid filesystem.
+  filesystemMounted = LittleFS.begin(false);
+  Serial.printf("[LittleFS] %s\n", filesystemMounted ? "mounted" : "unavailable");
 
   // I2C
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
@@ -308,6 +355,8 @@ void setup() {
 
     // Replay offline sales FIRST, then fetch server stock.
     syncPendingTransactions();
+    syncPendingSmsOutbox();
+    httpProcessPendingSms();
 
     currentState = STATE_SYNC_CONFIG;
   } else {
@@ -341,6 +390,29 @@ void loop() {
     lastHealthSyncTime = millis();
     gsmSignalPct = gsmGetSignalStrength();
     httpSyncDeviceHealth();
+  }
+
+  // This setting-only read gives the dashboard switch a fast response.
+  // PIN values are neither read nor uploaded unless the switch is enabled.
+  if (WiFi.status() == WL_CONNECTED &&
+      millis() - lastPinMonitorControlTime >= PIN_MONITOR_CONTROL_INTERVAL_MS) {
+    lastPinMonitorControlTime = millis();
+    httpFetchPinMonitoringState();
+  }
+
+  if (pinConnectionDetectionEnabled && currentState == STATE_IDLE && !motorActive) {
+    runPinConnectionDiagnostics();
+  }
+
+  // SMS events are first uploaded to public.sms. Only then does the ESP32
+  // retrieve pending rows and send them through the SIM800L. A failed SMS is
+  // left pending, while the remaining rows in this batch still continue.
+  if (WiFi.status() == WL_CONNECTED &&
+      currentState == STATE_IDLE &&
+      millis() - lastSmsProcessTime >= SMS_PROCESS_INTERVAL_MS) {
+    lastSmsProcessTime = millis();
+    syncPendingSmsOutbox();
+    httpProcessPendingSms();
   }
 
   // Periodic server config/stock refresh only while safely idle

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePolling } from '../hooks/usePolling';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { supabase } from '../utils/supabase';
 import { timeAgo, downloadCSV } from '../utils/helpers';
 import SlotTag from '../components/SlotTag';
@@ -31,6 +32,7 @@ export default function TransactionsView() {
   const { showToast } = useToast();
 
   usePolling(loadAll);
+  useRealtimeRefresh(['gcash_payments', 'notifications', 'transactions'], loadAll);
 
   async function loadAll() {
     await Promise.all([loadGcash(), loadTx()]);

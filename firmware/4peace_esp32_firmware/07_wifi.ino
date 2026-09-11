@@ -28,6 +28,7 @@ void handleWiFiReconnect() {
     Serial.println(WiFi.localIP());
 
     syncPendingTransactions();
+    syncPendingSmsOutbox();
 
     // Only fetch cloud stock after replaying offline transactions.
     bool anyPending = false;

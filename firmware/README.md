@@ -34,7 +34,7 @@ BEFORE FLASHING
 3. Keep config.local.h private; it is ignored by Git.
 4. Re-run firmware:configure after changing the backend device token.
 5. Set DEFAULT_ADMIN_SMS.
-6. Run supabase_complete_vend_FIX.sql in Supabase SQL Editor.
+6. Apply the Supabase migrations, including `20260911100000_sms_outbox.sql`.
 7. Make sure machine_settings.device_api_key has the SAME DEVICE_API_KEY.
 8. Confirm LCD address (0x27) and PCF8574 address (0x20) with an I2C scanner.
 9. Calibrate the coin acceptor pulse values.
@@ -148,6 +148,12 @@ CONNECTION UPDATE (2026-09-10)
 - No USB serial device was detected during setup. The board still needs flashing
   and a physical test. ESP32-WROOM-32 needs a 2.4 GHz SSID, even if your router also
   broadcasts 5 GHz. Edit config.local.h if the supplied SSID is 5 GHz-only.
+- SMS is a durable outbox flow: payment, dispensed-product, tamper/theft, and
+  low-stock events are stored first in Supabase `sms` with `status = 'pending'`.
+  The ESP32 fetches pending rows in ID order, changes a row to `sent` only after
+  SIM800L confirms delivery, and leaves failed rows pending for retry while it
+  continues to the next row. Events created while Wi-Fi is offline are retained
+  in ESP32 NVS until their Supabase row is acknowledged.
 
 REPEATABLE CHECKS
 -----------------

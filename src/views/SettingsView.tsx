@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '../utils/supabase';
 import { timeAgo, parseNumber } from '../utils/helpers';
 import Switch from '../components/Switch';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../hooks/useAuth';
+import { usePolling } from '../hooks/usePolling';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
+import Esp32PinStatusModal from '../components/Esp32PinStatusModal';
 
 interface Slot { id: number; slot_code: string; product_name: string; capacity: number }
 interface MachineSettings {
@@ -14,6 +17,7 @@ interface MachineSettings {
   admin_sms_number: string;
   tamper_alarm_enabled: boolean;
   auto_reset_coin_count: boolean;
+  enable_pin_connection_detection: boolean;
   device_api_key: string;
 }
 interface Profile {
@@ -42,6 +46,7 @@ export default function SettingsView() {
   const [smsNumber, setSmsNumber] = useState('');
   const [tamper, setTamper] = useState(true);
   const [autoReset, setAutoReset] = useState(false);
+  const [pinConnectionDetection, setPinConnectionDetectionEnabled] = useState(false);
   const [deviceKey, setDeviceKey] = useState('');
 
   // Profile
@@ -52,7 +57,8 @@ export default function SettingsView() {
   const [profPhone, setProfPhone] = useState('');
   const [profPassword, setProfPassword] = useState('');
 
-  useEffect(() => { loadAll(); }, []);
+  usePolling(loadAll);
+  useRealtimeRefresh(['admins', 'machine_settings', 'slots'], loadAll);
 
   async function loadAll() {
     await Promise.all([loadSlots(), loadSettings(), loadProfile()]);
@@ -81,6 +87,7 @@ export default function SettingsView() {
       setSmsNumber(data.admin_sms_number ?? '');
       setTamper(!!data.tamper_alarm_enabled);
       setAutoReset(!!data.auto_reset_coin_count);
+      setPinConnectionDetectionEnabled(!!data.enable_pin_connection_detection);
       setDeviceKey(data.device_api_key ?? '');
     }
   }
@@ -125,12 +132,32 @@ export default function SettingsView() {
         admin_sms_number: smsNumber.trim(),
         tamper_alarm_enabled: tamper,
         auto_reset_coin_count: autoReset,
+        enable_pin_connection_detection: pinConnectionDetection,
         device_api_key: deviceKey.trim(),
       })
       .eq('id', ms.id);
     if (error) { showToast('Could not save settings.', true); return; }
     showToast('Machine settings saved.');
     loadSettings();
+  }
+
+  async function updatePinConnectionDetection(enabled: boolean) {
+    if (!ms) return;
+
+    const previous = pinConnectionDetection;
+    setPinConnectionDetectionEnabled(enabled);
+    const { error } = await supabase
+      .from('machine_settings')
+      .update({ enable_pin_connection_detection: enabled })
+      .eq('id', ms.id);
+
+    if (error) {
+      setPinConnectionDetectionEnabled(previous);
+      showToast('Could not update ESP32 PIN connection detection.', true);
+      return;
+    }
+
+    setMs(current => current ? { ...current, enable_pin_connection_detection: enabled } : current);
   }
 
   async function saveProfile() {
@@ -296,6 +323,14 @@ export default function SettingsView() {
 
           <div className="field-row">
             <div>
+              <div className="field-label">Enable ESP32 PIN Connection Detection</div>
+              <div className="field-hint">Temporarily probes relay and buzzer connections only while this switch is on.</div>
+            </div>
+            <Switch on={pinConnectionDetection} onChange={updatePinConnectionDetection} />
+          </div>
+
+          <div className="field-row">
+            <div>
               <div className="field-label">Device API key</div>
               <div className="field-hint">ESP32 sends this on gcash_verify / gcash_status</div>
             </div>
@@ -303,6 +338,7 @@ export default function SettingsView() {
           </div>
         </div>
       </div>
+      {pinConnectionDetection && <Esp32PinStatusModal onClose={() => { void updatePinConnectionDetection(false); }} />}
     </div>
   );
 }

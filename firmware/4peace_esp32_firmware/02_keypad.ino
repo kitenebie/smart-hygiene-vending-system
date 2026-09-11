@@ -93,6 +93,13 @@ void handleKeypress(char key) {
         return;
       }
 
+      if (!smsOutboxHasSpace(requiredSmsOutboxSlotsForVend(selectedSlotIndex))) {
+        updateLcd("SMS Queue Full", "Sync Required");
+        beepBuzzer(3, 100);
+        selectedSlotIndex = -1;
+        return;
+      }
+
       // Coin-first flow: if enough credit already exists, dispense immediately.
       if (currentCredit >= unitPrice) {
         currentState = STATE_COIN_PAYMENT;
@@ -177,6 +184,9 @@ void handleKeypress(char key) {
         selectedSlotIndex = -1;
       } else if (!pendingQueueHasSpace()) {
         updateLcd("Service Busy", "Sync Required");
+        selectedSlotIndex = -1;
+      } else if (!smsOutboxHasSpace(requiredSmsOutboxSlotsForVend(selectedSlotIndex))) {
+        updateLcd("SMS Queue Full", "Sync Required");
         selectedSlotIndex = -1;
       }
       return;

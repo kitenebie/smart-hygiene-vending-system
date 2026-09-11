@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePolling } from '../hooks/usePolling';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { supabase } from '../utils/supabase';
 import { timeAgo, levelMeta } from '../utils/helpers';
 import { useToast } from '../components/Toast';
@@ -22,6 +23,7 @@ export default function NotificationsView({ onUnreadChange }: NotificationsViewP
   const { showToast } = useToast();
 
   usePolling(load);
+  useRealtimeRefresh(['notifications'], load);
 
   async function load() {
     try {

@@ -98,7 +98,12 @@
 
 #define HEALTH_SYNC_INTERVAL_MS    60000UL
 #define CONFIG_SYNC_INTERVAL_MS    60000UL
+#define PIN_MONITOR_CONTROL_INTERVAL_MS 5000UL
+#define PIN_DIAGNOSTIC_INTERVAL_MS       2000UL
+#define PIN_DIAGNOSTIC_SETTLE_MS            5UL
 #define WIFI_RETRY_INTERVAL_MS     10000UL
+#define SMS_PROCESS_INTERVAL_MS     15000UL
+#define SMS_PROCESS_BATCH_SIZE      4
 
 #define COIN_PULSE_TIMEOUT_MS      400UL
 
@@ -114,6 +119,7 @@
 // 10. Persistent offline journal
 // ------------------------------------------------------------
 #define PENDING_QUEUE_MAX          20
+#define SMS_OUTBOX_MAX              20
 
 // ------------------------------------------------------------
 // 11. TLS

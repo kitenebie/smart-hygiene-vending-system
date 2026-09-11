@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePolling } from '../hooks/usePolling';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import Chart from 'react-apexcharts';
 import type { ApexOptions } from 'apexcharts';
 import { supabase } from '../utils/supabase';
@@ -28,8 +29,6 @@ interface OverviewData {
   coin_box_pct: number;
   low_stock_slots: { slot_code: string; product_name: string; stock: number; status: 'low' | 'empty' }[];
   activity: { type: string; text: string; time: string; time_label: string; level: 'info' | 'warning' | 'critical' }[];
-  last_sync: string | null;
-
   // Chart data
   trendDates: string[];
   trendSales: number[];
@@ -48,15 +47,12 @@ interface OverviewData {
   stockDistributionValues: number[];
 }
 
-interface OverviewViewProps {
-  onSyncChange: (v: string | null) => void;
-}
-
-export default function OverviewView({ onSyncChange }: OverviewViewProps) {
+export default function OverviewView() {
   const [data, setData] = useState<OverviewData | null>(null);
   const { showToast } = useToast();
 
   usePolling(load);
+  useRealtimeRefresh(['device_health', 'machine_health_logs', 'machine_settings', 'slots', 'transactions'], load);
 
   async function load() {
     try {
@@ -151,8 +147,6 @@ export default function OverviewView({ onSyncChange }: OverviewViewProps) {
         })),
       ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 6);
 
-      onSyncChange(health?.last_sync ?? null);
-
       // ─────────────────────────────────────────────────────────────
       // 6. Analytics Data Aggregation for ApexCharts
       // ─────────────────────────────────────────────────────────────
@@ -228,8 +222,6 @@ export default function OverviewView({ onSyncChange }: OverviewViewProps) {
         coin_box_pct: coinBoxPct,
         low_stock_slots: lowStockSlots,
         activity,
-        last_sync: health?.last_sync ?? null,
-
         trendDates,
         trendSales,
         trendGcash,

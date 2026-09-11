@@ -45,6 +45,30 @@ String makeTransactionId() {
   return String(buffer);
 }
 
+String makeSmsEventId() {
+  char buffer[72];
+  uint32_t rnd = esp_random();
+
+  snprintf(
+    buffer,
+    sizeof(buffer),
+    "%s-SMS-%08lX-%08lX",
+    MACHINE_ID,
+    (unsigned long)millis(),
+    (unsigned long)rnd
+  );
+
+  return String(buffer);
+}
+
+int requiredSmsOutboxSlotsForVend(int slotIdx) {
+  if (slotIdx < 0 || slotIdx >= 5) return 2;
+
+  // Every completed vend creates payment + dispensed_product. Reserve a third
+  // row when that same vend will reach the low-stock threshold.
+  return 2 + ((slots[slotIdx].stock - 1 <= lowStockThreshold) ? 1 : 0);
+}
+
 bool executeDispense(int slotIdx, const String &method, const String &refCode) {
   if (slotIdx < 0 || slotIdx >= 5) return false;
 
@@ -60,6 +84,19 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
 
   if (!pendingQueueHasSpace()) {
     updateLcd("Sync Queue Full", "Service Locked");
+    currentState = STATE_ERROR;
+    beepBuzzer(4, 100);
+    delay(1200);
+    currentState = STATE_IDLE;
+    return false;
+  }
+
+  // A completed vend produces payment + dispensed-product SMS events and can
+  // also produce a low-stock SMS.
+  // Reserve local durable outbox capacity before running the motor so neither
+  // event can be lost when Wi-Fi is unavailable.
+  if (!smsOutboxHasSpace(requiredSmsOutboxSlotsForVend(slotIdx))) {
+    updateLcd("SMS Queue Full", "Service Locked");
     currentState = STATE_ERROR;
     beepBuzzer(4, 100);
     delay(1200);
@@ -193,6 +230,16 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
     syncPendingTransactions();
   }
 
+  String paymentMessage =
+    "4Peace: Payment received P" + String(unitPrice, 2) +
+    " via " + method + " for " + s.slotCode;
+  String dispenseMessage =
+    "4Peace: Dispensed " + s.productName +
+    " (" + s.slotCode + "). Stock left: " + String(s.stock);
+
+  queueSmsEvent("payment", paymentMessage);
+  queueSmsEvent("dispensed_product", dispenseMessage);
+
   // Low stock alert based on local stock.
   if (s.stock <= lowStockThreshold) {
     String msg =
@@ -208,9 +255,7 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
       );
     }
 
-    if (s.stock <= 2) {
-      gsmSendSMS(adminSmsNumber, "4Peace: " + msg);
-    }
+    queueSmsEvent("low_stock", "4Peace: " + msg);
   }
 
   updateLcd("Item Dispatched", "Please Take Item");

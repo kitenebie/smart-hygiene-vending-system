@@ -66,8 +66,8 @@ void handleTamperCheck() {
     );
   }
 
-  gsmSendSMS(
-    adminSmsNumber,
+  queueSmsEvent(
+    "theft_alert",
     String("4Peace ALERT: Tamper/vibration detected on ") + MACHINE_ID
   );
 }

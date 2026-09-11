@@ -20,6 +20,7 @@ for (const path of [
   'device_health?id=eq.1&select=id,last_sync',
   'machine_health_logs?select=id&limit=0',
   'notifications?select=id&limit=0',
+  'sms?select=id,status,attempt_count&limit=0',
 ]) {
   const result = await request(path);
   assert.equal(result.status, 200, `${path}: HTTP ${result.status}`);
@@ -41,4 +42,25 @@ const result = await request('rpc/complete_vend', {
 });
 assert.equal(result.data.message, 'slot not found', 'RPC must accept the device token and reject the nonexistent test slot');
 console.log('PASS complete_vend signature and device token; nonexistent slot rejected, no sale created');
+
+// The health path must reject an unknown device key before it can update
+// device_health or insert a resource telemetry row.
+const telemetryResult = await request('rpc/sync_device_telemetry', {
+  method: 'POST', body: JSON.stringify({
+    p_device_key: 'invalid-device-key', p_machine_id: 'VM001', p_device_health_id: 1,
+    p_health: {}, p_resource: {},
+  }),
+});
+assert.equal(telemetryResult.data.success, false, 'invalid telemetry key must be rejected');
+assert.equal(telemetryResult.data.message, 'invalid device key');
+console.log('PASS authenticated telemetry RPC rejects an invalid device token');
+
+const pinStatusResult = await request('rpc/sync_esp32_pin_status', {
+  method: 'POST', body: JSON.stringify({
+    p_device_key: 'invalid-device-key', p_machine_id: 'VM001', p_pins: [],
+  }),
+});
+assert.equal(pinStatusResult.data.success, false, 'invalid PIN-status key must be rejected');
+assert.equal(pinStatusResult.data.message, 'invalid device key');
+console.log('PASS authenticated PIN-status RPC rejects an invalid device token');
 console.log('Host API checks passed. USB flashing and 2.4 GHz device tests are still required.');

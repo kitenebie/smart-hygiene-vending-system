@@ -80,6 +80,116 @@ bool enqueuePendingTransaction(const PendingTx &tx) {
   return false;
 }
 
+// ---------------------------------------------------------------------------
+// SMS outbox
+// ---------------------------------------------------------------------------
+// SMS alerts use their own durable queue. An entry remains here until the
+// Supabase insert is acknowledged; after that, the public.sms row is the
+// source of truth for SIM800L delivery/retry state.
+
+bool smsOutboxHasSpace(int requiredSlots) {
+  if (requiredSlots <= 0) return true;
+
+  int emptySlots = 0;
+  for (int i = 0; i < SMS_OUTBOX_MAX; i++) {
+    char keyName[8];
+    snprintf(keyName, sizeof(keyName), "sms%02d", i);
+
+    if (prefs.getString(keyName, "").length() == 0) {
+      emptySlots++;
+      if (emptySlots >= requiredSlots) return true;
+    }
+  }
+
+  return false;
+}
+
+bool queueSmsEvent(const String &eventType, const String &message) {
+  if (!smsOutboxHasSpace()) {
+    Serial.printf("[SMS] Local outbox full; event %s was not queued.\n",
+                  eventType.c_str());
+    return false;
+  }
+
+  SmsEvent event;
+  event.clientEventId = makeSmsEventId();
+  event.eventType = eventType;
+  event.recipient = adminSmsNumber;
+  event.message = message;
+
+  for (int i = 0; i < SMS_OUTBOX_MAX; i++) {
+    char keyName[8];
+    snprintf(keyName, sizeof(keyName), "sms%02d", i);
+
+    if (prefs.getString(keyName, "").length() != 0) continue;
+
+    StaticJsonDocument<768> doc;
+    doc["client_event_id"] = event.clientEventId;
+    doc["event_type"] = event.eventType;
+    doc["recipient"] = event.recipient;
+    doc["message"] = event.message;
+
+    String json;
+    serializeJson(doc, json);
+
+    if (prefs.putString(keyName, json) > 0) {
+      Serial.printf("[SMS] Queued %s in %s\n",
+                    event.clientEventId.c_str(), keyName);
+
+      // This only uploads the durable event. It does not call the modem.
+      if (WiFi.status() == WL_CONNECTED) syncPendingSmsOutbox();
+      return true;
+    }
+
+    return false;
+  }
+
+  return false;
+}
+
+void syncPendingSmsOutbox() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  for (int i = 0; i < SMS_OUTBOX_MAX; i++) {
+    char keyName[8];
+    snprintf(keyName, sizeof(keyName), "sms%02d", i);
+
+    String json = prefs.getString(keyName, "");
+    if (json.length() == 0) continue;
+
+    StaticJsonDocument<768> doc;
+    if (deserializeJson(doc, json)) {
+      Serial.printf("[SMS] Corrupt outbox entry %s; leaving it for inspection.\n",
+                    keyName);
+      continue;
+    }
+
+    SmsEvent event;
+    event.clientEventId = doc["client_event_id"] | "";
+    event.eventType = doc["event_type"] | "";
+    event.recipient = doc["recipient"] | "";
+    event.message = doc["message"] | "";
+
+    if (!event.clientEventId.length() || !event.eventType.length() ||
+        !event.message.length()) {
+      Serial.printf("[SMS] Invalid outbox entry %s; leaving it for inspection.\n",
+                    keyName);
+      continue;
+    }
+
+    if (!httpQueueSmsEvent(event)) {
+      Serial.printf("[SMS] Supabase upload failed for %s; will retry later.\n",
+                    event.clientEventId.c_str());
+      // Preserve event ordering until the connection/service is healthy again.
+      return;
+    }
+
+    prefs.remove(keyName);
+    Serial.printf("[SMS] Saved %s to Supabase sms table.\n",
+                  event.clientEventId.c_str());
+  }
+}
+
 void syncPendingTransactions() {
   if (WiFi.status() != WL_CONNECTED) return;
 

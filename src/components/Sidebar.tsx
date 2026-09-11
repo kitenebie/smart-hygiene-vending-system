@@ -1,4 +1,4 @@
-type View = 'overview' | 'slots' | 'transactions' | 'health' | 'notifications' | 'settings';
+type View = 'overview' | 'slots' | 'transactions' | 'health' | 'notifications' | 'sms_logs' | 'settings';
 
 interface SidebarProps {
   activeView: View;
@@ -56,6 +56,16 @@ const navItems: { view: View; label: string; icon: React.ReactNode }[] = [
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
         <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+    ),
+  },
+  {
+    view: 'sms_logs',
+    label: 'SMS Logs',
+    icon: (
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M21 11.5a8.38 8.38 0 0 1-9 8.5 9.46 9.46 0 0 1-4.78-1.28L3 20l1.38-3.68A8.48 8.48 0 0 1 3 11.5a8.5 8.5 0 0 1 17 0Z"/>
+        <path d="M8 11.5h.01M12 11.5h.01M16 11.5h.01" strokeWidth="2.4" strokeLinecap="round"/>
       </svg>
     ),
   },

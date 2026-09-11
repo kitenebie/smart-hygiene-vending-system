@@ -1,13 +1,10 @@
-import { timeAgo } from '../utils/helpers';
-
 interface TopbarProps {
   title: string;
   subtitle: string;
-  lastSync: string | null;
+  realtimeActive: boolean;
 }
 
-export default function Topbar({ title, subtitle, lastSync }: TopbarProps) {
-  const syncLabel = lastSync ? 'Last sync: ' + timeAgo(lastSync) : 'Awaiting first sync';
+export default function Topbar({ title, subtitle, realtimeActive }: TopbarProps) {
   return (
     <div className="topbar">
       <div>
@@ -15,8 +12,10 @@ export default function Topbar({ title, subtitle, lastSync }: TopbarProps) {
         <div className="page-sub">{subtitle}</div>
       </div>
       <div className="machine-pill">
-        <div className="status-dot" />
-        <span>{syncLabel}</span>
+        <div className={`status-dot${realtimeActive ? '' : ' inactive'}`} />
+        <span className={`realtime-status${realtimeActive ? ' active' : ' inactive'}`}>
+          {realtimeActive ? 'Realtime active' : 'Realtime not active'}
+        </span>
       </div>
     </div>
   );

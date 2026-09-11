@@ -77,6 +77,7 @@ button{font-family:inherit; cursor:pointer; border:none; background:none;}
   font-size:12px; color:#8f8496; display:flex; align-items:center; gap:9px;
 }
 .status-dot{width:7px; height:7px; border-radius:50%; background:var(--sage); box-shadow:0 0 0 3px rgba(143,179,137,.22); flex-shrink:0;}
+.status-dot.inactive{background:var(--amber); box-shadow:0 0 0 3px rgba(224,171,76,.22);}
 
 /* ===== MAIN ===== */
 .main{flex:1; min-width:0;}
@@ -87,7 +88,16 @@ button{font-family:inherit; cursor:pointer; border:none; background:none;}
   display:flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--line);
   padding:8px 14px 8px 10px; border-radius:999px; font-size:12.5px; color:var(--text-soft);
 }
+.realtime-status.active{color:var(--sage);}
+.realtime-status.inactive{color:var(--amber);}
 .content{padding:26px 40px 50px;}
+.health-resource-note{padding:0 22px 18px; color:var(--text-soft); font-size:12px; line-height:1.5;}
+.pin-modal-backdrop{position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(5,4,7,.78); backdrop-filter:blur(5px);}
+.pin-modal{width:min(calc(100vw - 32px),1152px); max-height:calc(100vh - 32px); overflow:hidden; background:var(--card); border:1px solid var(--line); border-radius:18px; box-shadow:0 24px 80px rgba(0,0,0,.5);}
+.pin-modal-head{display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:24px 26px 18px; border-bottom:1px solid var(--line);}
+.pin-modal-head h2{font-size:23px; line-height:1.2;}.pin-modal-head p{margin-top:5px; color:var(--text-soft); font-size:13px;}
+.pin-modal-close{width:34px; height:34px; border:1px solid var(--line); border-radius:9px; color:var(--text-soft); font-size:26px; line-height:1;}.pin-modal-close:hover{color:var(--text); border-color:var(--text-faint);}
+.pin-table-wrap{max-height:calc(100vh - 170px); overflow:auto;}.pin-status-table{width:100%; min-width:760px; border-collapse:collapse;}.pin-status-table th{padding:13px 22px; color:var(--text-faint); background:#111015; text-align:left; font-size:11px; letter-spacing:.07em; text-transform:uppercase;}.pin-status-table td{padding:17px 22px; border-top:1px solid var(--line); font-size:13px;}.pin-number{display:block; font-family:'JetBrains Mono',monospace; color:var(--text); font-weight:600;}.pin-mode,.pin-value{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-soft);}.pin-badge{display:inline-flex; align-items:center; gap:7px; padding:6px 9px; border-radius:999px; font-size:11px; font-weight:700; white-space:nowrap;}.pin-badge.connected{color:var(--sage); background:var(--sage-bg);}.pin-badge.disconnected{color:var(--rust); background:var(--rust-bg);}.pin-pulse{width:7px; height:7px; border-radius:50%; background:var(--sage); box-shadow:0 0 0 0 rgba(143,179,137,.6); animation:pinPulse 1.5s infinite;}@keyframes pinPulse{70%{box-shadow:0 0 0 7px rgba(143,179,137,0);}100%{box-shadow:0 0 0 0 rgba(143,179,137,0);}}
 
 /* ===== STAT CARDS ===== */
 .stat-row{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:26px;}
@@ -152,6 +162,7 @@ button{font-family:inherit; cursor:pointer; border:none; background:none;}
 .tag.pending{background:var(--amber-bg); color:var(--amber);}
 .tag.approved{background:var(--sage-bg); color:var(--sage);}
 .tag.rejected{background:var(--rust-bg); color:var(--rust);}
+.tag.sent{background:var(--sage-bg); color:var(--sage);}
 .gcash-actions{display:flex; gap:8px;}
 .btn.small{padding:6px 12px; font-size:12px;}
 .btn.approve{background:var(--sage); color:#0d1a0d;}
@@ -183,6 +194,16 @@ button{font-family:inherit; cursor:pointer; border:none; background:none;}
 .log-text{font-size:13px;}
 .log-time{font-size:11.5px; color:var(--text-faint); margin-top:2px;}
 .empty-note{padding:22px; color:var(--text-soft); font-size:13px;}
+
+/* ===== SMS LOGS ===== */
+.table-scroll{overflow-x:auto;}
+.sms-table{min-width:860px;}
+.sms-event{font-size:13px; font-weight:600;}
+.sms-machine{font-size:11px; color:var(--text-faint); margin-top:3px;}
+.sms-message{max-width:420px; line-height:1.45;}
+.sms-error{font-size:11.5px; color:var(--rust); margin-top:4px;}
+.sms-live{display:flex; align-items:center; gap:8px; color:var(--sage); font-size:12px; font-weight:600;}
+.sms-live .status-dot{width:6px; height:6px;}
 
 /* ===== SETTINGS ===== */
 .settings-grid{padding:22px; display:flex; flex-direction:column; gap:18px;}

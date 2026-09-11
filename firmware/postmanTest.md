@@ -110,25 +110,44 @@ in the Supabase Table Editor.
 
 ### A. Send device health heartbeat
 
-This updates the actual `device_health` row used by the dashboard.
+This authenticated RPC validates the Device API Key and machine ID, updates the
+actual `device_health` row, and records one resource-telemetry sample for the
+dashboard charts.
 
 ```http
-PATCH {{supabaseUrl}}/rest/v1/device_health?id=eq.{{healthId}}
+POST {{supabaseUrl}}/rest/v1/rpc/sync_device_telemetry
 apikey: {{supabaseKey}}
 Content-Type: application/json
-Prefer: return=representation
 
 {
-  "esp32_uptime_seconds": 12345,
-  "coin_pulses_session": 0,
-  "coin_box_pulses_total": 0,
-  "tamper_status": "idle",
-  "sim800l_signal_pct": 80
+  "p_device_key": "{{deviceApiKey}}",
+  "p_machine_id": "{{machineId}}",
+  "p_device_health_id": {{healthId}},
+  "p_health": {
+    "esp32_uptime_seconds": 12345,
+    "coin_pulses_session": 0,
+    "coin_box_pulses_total": 0,
+    "tamper_status": "idle",
+    "sim800l_signal_pct": 80
+  },
+  "p_resource": {
+    "internal_sram_total_bytes": 327680,
+    "internal_sram_free_bytes": 200000,
+    "external_psram_total_bytes": 0,
+    "external_psram_free_bytes": 0,
+    "external_flash_total_bytes": 4194304,
+    "external_flash_used_bytes": 1000000,
+    "filesystem_total_bytes": 0,
+    "filesystem_used_bytes": 0,
+    "rom_total_bytes": 458752,
+    "cpu_temperature_c": 37.5
+  }
 }
 ```
 
-Expected: HTTP `200` and one updated row. `last_sync` should advance
-automatically. Do not use fake values while the real ESP32 is running.
+Expected: HTTP `200` with `{"success":true}`. `last_sync` should advance
+automatically. An invalid `deviceApiKey` returns `{"success":false,"message":"invalid device key"}`.
+Do not use fake values while the real ESP32 is running.
 
 ### B. Submit a pending GCash reference
 

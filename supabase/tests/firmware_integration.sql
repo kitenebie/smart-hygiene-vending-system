@@ -9,6 +9,8 @@ DECLARE
   remaining integer;
   prefix text := 'qa-' || substr(md5(random()::text), 1, 12);
   rejected boolean;
+  sms_id bigint;
+  health_id integer;
 BEGIN
   SELECT device_api_key INTO STRICT token FROM public.machine_settings ORDER BY id DESC LIMIT 1;
   INSERT INTO public.slots(id, slot_code, product_name, stock, capacity)
@@ -56,16 +58,50 @@ BEGIN
   END;
   IF NOT rejected THEN RAISE EXCEPTION 'invalid device token accepted'; END IF;
 
+  INSERT INTO public.sms (
+    client_event_id, machine_id, event_type, recipient, message
+  )
+  VALUES (
+    prefix || '-sms', 'QA', 'payment', '+639000000000', 'Rollback-only SMS test'
+  )
+  RETURNING id INTO sms_id;
+  UPDATE public.sms
+  SET attempt_count = 1, last_error = 'SIM800L send failed'
+  WHERE id = sms_id;
+  UPDATE public.sms SET status = 'sent' WHERE id = sms_id;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.sms
+    WHERE id = sms_id AND status = 'sent' AND attempt_count = 1
+      AND sent_at IS NOT NULL AND last_attempt_at IS NOT NULL
+      AND last_error IS NULL
+  ) THEN
+    RAISE EXCEPTION 'SMS delivery state transition failed';
+  END IF;
+
   SELECT stock INTO remaining FROM public.slots WHERE id = -900001;
   IF remaining <> 3 OR (SELECT count(*) FROM public.transactions WHERE slot_id = -900001) <> 2 THEN
     RAISE EXCEPTION 'incorrect transaction or stock totals';
   END IF;
-  INSERT INTO public.device_health(id, last_sync) VALUES (-900001, '2000-01-01');
-  UPDATE public.device_health SET esp32_uptime_seconds = 5 WHERE id = -900001;
-  IF NOT EXISTS (SELECT 1 FROM public.device_health WHERE id = -900001 AND last_sync = now()) THEN
-    RAISE EXCEPTION 'health timestamp did not advance';
+  -- Health telemetry is deliberately RPC-only. This mirrors the ESP32 request
+  -- without restoring broad anon INSERT/UPDATE permissions on its tables.
+  SELECT id INTO STRICT health_id FROM public.device_health ORDER BY id LIMIT 1;
+  result := public.sync_device_telemetry(
+    token,
+    'VM001',
+    health_id,
+    '{"esp32_uptime_seconds":5,"coin_pulses_session":0,"coin_box_pulses_total":0,"sim800l_signal_pct":0,"buck1_voltage":0,"buck2_voltage":0,"tamper_status":"idle"}'::jsonb,
+    '{"internal_sram_total_bytes":1,"internal_sram_free_bytes":1,"external_psram_total_bytes":0,"external_psram_free_bytes":0,"external_flash_total_bytes":1,"external_flash_used_bytes":0,"filesystem_total_bytes":1,"filesystem_used_bytes":0,"rom_total_bytes":0,"cpu_temperature_c":25}'::jsonb
+  );
+  IF result->>'success' <> 'true' THEN
+    RAISE EXCEPTION 'authenticated health telemetry failed: %', result;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.device_health
+    WHERE id = health_id AND esp32_uptime_seconds = 5 AND last_sync = now()
+  ) THEN
+    RAISE EXCEPTION 'health RPC did not update telemetry or timestamp';
   END IF;
 END;
 $$;
-SELECT 'PASS: coin, GCash, replay, amount validation, consumed reference, device token, inventory, health timestamp (anon role)' AS result;
+SELECT 'PASS: coin, GCash, replay, amount validation, consumed reference, device token, inventory, health timestamp, SMS outbox (anon role)' AS result;
 ROLLBACK;

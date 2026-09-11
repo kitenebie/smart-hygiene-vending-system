@@ -5,7 +5,10 @@ interface SwitchProps {
 
 export default function Switch({ on, onChange }: SwitchProps) {
   return (
-    <div
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
       className={`switch${on ? '' : ' off'}`}
       onClick={() => onChange(!on)}
     />

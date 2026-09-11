@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePolling } from '../hooks/usePolling';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { supabase } from '../utils/supabase';
 import { slotStatus, statusMeta } from '../utils/helpers';
 import SlotTag from '../components/SlotTag';
@@ -19,6 +20,7 @@ export default function SlotsView() {
   const { showToast } = useToast();
 
   usePolling(load);
+  useRealtimeRefresh(['machine_settings', 'slots'], load);
 
   async function load() {
     try {
