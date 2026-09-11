@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 type View = 'overview' | 'slots' | 'transactions' | 'health' | 'notifications' | 'sms_logs' | 'settings';
 
 interface SidebarProps {
@@ -82,8 +84,29 @@ const navItems: { view: View; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function Sidebar({ activeView, onNav, unreadCount }: SidebarProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, []);
+
   return (
-    <aside className="sidebar">
+    <>
+      <button
+        type="button"
+        className={`menu-toggle${menuOpen ? ' open' : ''}`}
+        aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen(open => !open)}
+      >
+        <span /><span /><span />
+      </button>
+      {menuOpen && <button type="button" className="menu-backdrop" aria-label="Close navigation menu" onClick={() => setMenuOpen(false)} />}
+      <aside className={`sidebar${menuOpen ? ' menu-open' : ''}`}>
       <div className="brand">
         <div className="brand-mark">
           <div className="brand-glyph">4P</div>
@@ -99,7 +122,10 @@ export default function Sidebar({ activeView, onNav, unreadCount }: SidebarProps
           <button
             key={view}
             className={`nav-item${activeView === view ? ' active' : ''}`}
-            onClick={() => onNav(view)}
+            onClick={() => {
+              onNav(view);
+              setMenuOpen(false);
+            }}
           >
             {icon}
             <span>{label}</span>
@@ -114,6 +140,7 @@ export default function Sidebar({ activeView, onNav, unreadCount }: SidebarProps
         <div className="status-dot" />
         <span>Unit #001 — Online</span>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }
