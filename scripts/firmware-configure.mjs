@@ -7,8 +7,8 @@ for (const line of (await readFile(resolve(root, '.env'), 'utf8')).split(/\r?\n/
   const match = line.match(/^\s*([A-Z_]+)\s*=\s*(.*?)\s*$/);
   if (match) env[match[1]] = match[2].replace(/^(['"])(.*)\1$/, '$2');
 }
-const url = env.VITE_SUPABASE_URL;
-const key = env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const url = env.VITE_SUPABASE_URL || 'https://fjexweubnccjrinhxrct.supabase.co';
+const key = env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_DRZfiimKuXLYdLvE-7iVxQ_yZLMr2OS';
 if (!url || !key || !key.startsWith('sb_publishable_')) throw new Error('Expected the React Supabase URL and publishable key in .env');
 const response = await fetch(`${url}/rest/v1/machine_settings?select=device_api_key&order=id.desc&limit=1`, {
   headers: { apikey: key }, signal: AbortSignal.timeout(15000),
