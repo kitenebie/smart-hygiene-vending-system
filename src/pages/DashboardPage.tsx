@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Topbar from '../components/Topbar';
 import OverviewView from '../views/OverviewView';
@@ -25,9 +26,18 @@ const titles: Record<View, [string, string]> = {
 };
 
 export default function DashboardPage() {
-  const [activeView, setActiveView] = useState<View>('overview');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [unreadCount, setUnreadCount] = useState(0);
   const [realtimeActive, setRealtimeActive] = useState(false);
+
+  const requestedView = searchParams.get('view');
+  const activeView: View = requestedView && requestedView in titles
+    ? requestedView as View
+    : 'overview';
+
+  const setActiveView = (view: View) => {
+    setSearchParams(view === 'overview' ? {} : { view });
+  };
 
   usePolling(loadBadge, 20000);
   useRealtimeRefresh(['notifications'], loadBadge, setRealtimeActive);
