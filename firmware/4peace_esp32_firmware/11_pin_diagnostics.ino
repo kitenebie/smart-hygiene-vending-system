@@ -50,6 +50,33 @@ const PinProbe PIN_PROBES[] = {
 
 const size_t PIN_PROBE_COUNT = sizeof(PIN_PROBES) / sizeof(PIN_PROBES[0]);
 
+// Keep the priority list aligned with the actual hardware declarations in config.h.
+// The dashboard displays these as, for example, "D34 - S1 Sensor".
+const char *priorityPinLabel(int gpio) {
+  switch (gpio) {
+    case TAMPER_SENSOR_PIN: return "Tamper Sensor";
+    case RELAY_S1_PIN: return "S1 Relay";
+    case RELAY_S2_PIN: return "S2 Relay";
+    case RELAY_S3_PIN: return "S3 Relay";
+    case RELAY_S4_PIN: return "S4 Relay";
+    case RELAY_S5_PIN: return "S5 Relay";
+    case I2C_SDA_PIN: return "I2C SDA (LCD)";
+    case I2C_SCL_PIN: return "I2C SCL (LCD)";
+    case BUZZER_PIN: return "Buzzer";
+    case COIN_SIGNAL_PIN: return "Coin Acceptor";
+    case IR_S5_PIN: return "S5 Sensor";
+    case IR_S3_PIN: return "S3 Sensor";
+    case IR_S4_PIN: return "S4 Sensor";
+    case IR_S1_PIN: return "S1 Sensor";
+    case IR_S2_PIN: return "S2 Sensor";
+    case BUCK1_ADC_PIN: return "Buck 1 ADC";
+    case BUCK2_ADC_PIN: return "Buck 2 ADC";
+    case GSM_RX_PIN: return "SIM800L RX";
+    case GSM_TX_PIN: return "SIM800L TX";
+    default: return "";
+  }
+}
+
 void restorePinDiagnosticOutputs() {
   for (size_t i = 0; i < PIN_PROBE_COUNT; i++) {
     if (PIN_PROBES[i].kind != PIN_OUTPUT_PROBE) continue;
@@ -112,7 +139,7 @@ void runPinConnectionDiagnostics() {
 
     JsonObject pin = pins.createNestedObject();
     pin["gpio"] = probe.gpio;
-    pin["pin_label"] = "";
+    pin["pin_label"] = priorityPinLabel(probe.gpio);
     pin["current_mode"] = probe.mode;
     pin["connection_status"] = measured && value == LOW ? "connected" : "disconnected";
     pin["realtime_value"] = measured
