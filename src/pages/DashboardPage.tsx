@@ -28,7 +28,7 @@ const titles: Record<View, [string, string]> = {
 export default function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [unreadCount, setUnreadCount] = useState(0);
-  const [realtimeActive, setRealtimeActive] = useState(false);
+  const [esp32LastSync, setEsp32LastSync] = useState<string | null>(null);
 
   const requestedView = searchParams.get('view');
   const activeView: View = requestedView && requestedView in titles
@@ -40,7 +40,11 @@ export default function DashboardPage() {
   };
 
   usePolling(loadBadge, 20000);
-  useRealtimeRefresh(['notifications'], loadBadge, setRealtimeActive);
+  // The ESP32 reports health once per minute. Polling also turns the status
+  // back to "Waiting" if the last report becomes stale while the tab is open.
+  usePolling(loadEsp32Status, 15000);
+  useRealtimeRefresh(['notifications'], loadBadge);
+  useRealtimeRefresh(['device_health'], loadEsp32Status);
 
   async function loadBadge() {
     const { data } = await supabase
@@ -50,18 +54,36 @@ export default function DashboardPage() {
     setUnreadCount(data?.length ?? 0);
   }
 
+  async function loadEsp32Status() {
+    const { data } = await supabase
+      .from('device_health')
+      .select('last_sync')
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    setEsp32LastSync(data?.last_sync ?? null);
+  }
+
   const handleUnreadChange = useCallback((count: number) => {
     setUnreadCount(count);
     // refresh badge after mark-all-read too
   }, []);
 
   const [title, subtitle] = titles[activeView];
+  const esp32Connected = esp32LastSync !== null &&
+    Date.now() - new Date(esp32LastSync).getTime() < 150000;
 
   return (
     <div className="app">
       <Sidebar activeView={activeView} onNav={setActiveView} unreadCount={unreadCount} />
       <main className="main">
-        <Topbar title={title} subtitle={subtitle} realtimeActive={realtimeActive} />
+        <Topbar
+          title={title}
+          subtitle={subtitle}
+          esp32Connected={esp32Connected}
+          lastSync={esp32LastSync}
+        />
         <div className="content">
           {activeView === 'overview' && <OverviewView />}
           {activeView === 'slots' && <SlotsView />}
