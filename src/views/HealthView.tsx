@@ -167,6 +167,14 @@ export default function HealthView() {
   ];
 
   const temperatureTimeline = buildTemperatureTimeline(history);
+  const recordedTemperatures = history
+    .map(sample => sample.cpu_temperature_c)
+    .filter((temperature): temperature is number => temperature !== null)
+    .map(Number)
+    .filter(Number.isFinite);
+  const highestRecordedTemperature = recordedTemperatures.length
+    ? Math.max(...recordedTemperatures)
+    : null;
   const temperatureOptions: ApexOptions = {
     chart: { type: 'line', background: 'transparent', foreColor: '#9b939e', toolbar: { show: false }, zoom: { enabled: false } },
     colors: ['#e0ab4c'], stroke: { curve: 'straight', width: 3 }, dataLabels: { enabled: false },
@@ -215,7 +223,7 @@ export default function HealthView() {
       </div>
 
       <div className="panel" style={{ marginTop: 20 }}>
-        <div className="panel-head"><div><div className="panel-title display">ESP32 internal CPU temperature</div><div className="panel-title-sub">On-chip temperature history · 0°C means no ESP32 telemetry for 3+ minutes</div></div></div>
+        <div className="panel-head"><div><div className="temperature-title-row"><div className="panel-title display">ESP32 internal CPU temperature</div>{highestRecordedTemperature !== null && <div className="temperature-highest"><span aria-hidden="true" />Highest recorded: {highestRecordedTemperature.toFixed(1)}°C</div>}</div><div className="panel-title-sub">On-chip temperature history · 0°C means no ESP32 telemetry for 3+ minutes</div></div></div>
         <div className="chart-body">{temperatureTimeline.length ? <Chart options={temperatureOptions} series={temperatureSeries} type="line" height={260} /> : <div className="empty-note">Waiting for a CPU-temperature telemetry sample.</div>}</div>
       </div>
 
