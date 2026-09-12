@@ -4,9 +4,26 @@
 // HTTP / Supabase
 // ============================================================================
 
+// Keep request logs useful without exposing API keys, payment references,
+// phone numbers, or request bodies in the Serial Monitor.
+void logSupabaseRequest(const char *method, const char *endpoint, size_t bodyBytes = 0) {
+  Serial.printf("[HTTP] %s Supabase %s", method, endpoint);
+  if (bodyBytes > 0) Serial.printf(" | body=%u bytes", (unsigned int)bodyBytes);
+  Serial.println();
+}
+
+void logSupabaseResponse(const char *method, const char *endpoint, int statusCode) {
+  Serial.printf("[HTTP] %s Supabase %s -> HTTP %d\n", method, endpoint, statusCode);
+}
+
+void logSupabaseBeginFailure(const char *method, const char *endpoint) {
+  Serial.printf("[HTTP] %s Supabase %s -> connection setup FAILED\n", method, endpoint);
+}
+
 void configureSecureClient(WiFiClientSecure &client) {
 #if TLS_ALLOW_INSECURE
   client.setInsecure();
+  Serial.println("[SUPABASE] TLS certificate verification: DISABLED");
 #else
   static bool timeConfigured = false;
   if (!timeConfigured) {
@@ -17,6 +34,8 @@ void configureSecureClient(WiFiClientSecure &client) {
     struct tm now;
     if (!getLocalTime(&now, 5000)) {
       Serial.println("[TLS] Waiting for network time; check NTP access.");
+    } else {
+      Serial.println("[TLS] Network time synchronized; certificate validation ready.");
     }
   }
   client.setCACert(SUPABASE_CA_CERTS);
@@ -48,10 +67,15 @@ bool httpFetchConfig() {
     String(SUPABASE_URL) +
     "/rest/v1/machine_settings?select=*&order=id.desc&limit=1";
 
-  if (!http.begin(client, url)) return false;
+  logSupabaseRequest("GET", "machine_settings");
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("GET", "machine_settings");
+    return false;
+  }
   addSupabaseHeaders(http);
 
   int code = http.GET();
+  logSupabaseResponse("GET", "machine_settings", code);
 
   if (code != 200) {
     Serial.printf("[CONFIG] machine_settings HTTP %d\n", code);
@@ -109,9 +133,14 @@ bool httpFetchPinMonitoringState() {
   String url = String(SUPABASE_URL) +
     "/rest/v1/machine_settings?select=enable_pin_connection_detection&order=id.desc&limit=1";
 
-  if (!http.begin(client, url)) return false;
+  logSupabaseRequest("GET", "machine_settings (pin monitoring)");
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("GET", "machine_settings (pin monitoring)");
+    return false;
+  }
   addSupabaseHeaders(http);
   int code = http.GET();
+  logSupabaseResponse("GET", "machine_settings (pin monitoring)", code);
   String payload = http.getString();
   http.end();
   if (code != 200) return false;
@@ -140,10 +169,15 @@ bool httpFetchSlots() {
     String(SUPABASE_URL) +
     "/rest/v1/slots?select=id,slot_code,product_name,stock,capacity&order=id.asc";
 
-  if (!http.begin(client, url)) return false;
+  logSupabaseRequest("GET", "slots");
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("GET", "slots");
+    return false;
+  }
   addSupabaseHeaders(http);
 
   int code = http.GET();
+  logSupabaseResponse("GET", "slots", code);
 
   if (code != 200) {
     Serial.printf("[SLOTS] HTTP %d\n", code);
@@ -202,7 +236,10 @@ int httpSubmitGcashPayment(
   HTTPClient http;
   String url = String(SUPABASE_URL) + "/rest/v1/gcash_payments";
 
-  if (!http.begin(client, url)) return -1;
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("POST", "gcash_payments");
+    return -1;
+  }
   addSupabaseHeaders(http, true);
 
   http.addHeader("Prefer", "return=minimal");
@@ -216,7 +253,9 @@ int httpSubmitGcashPayment(
   String body;
   serializeJson(doc, body);
 
+  logSupabaseRequest("POST", "gcash_payments", body.length());
   int code = http.POST(body);
+  logSupabaseResponse("POST", "gcash_payments", code);
 
   Serial.printf("[GCASH] Submit HTTP %d\n", code);
 
@@ -257,10 +296,15 @@ String httpCheckGcashStatus(const String &refCode) {
     refCode +
     "&select=status,consumed_at,slot_id,amount&limit=1";
 
-  if (!http.begin(client, url)) return "error";
+  logSupabaseRequest("GET", "gcash_payments status");
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("GET", "gcash_payments status");
+    return "error";
+  }
   addSupabaseHeaders(http);
 
   int code = http.GET();
+  logSupabaseResponse("GET", "gcash_payments status", code);
 
   if (code != 200) {
     http.end();
@@ -307,7 +351,10 @@ bool httpCompleteVend(const PendingTx &tx, int &serverStock) {
     String(SUPABASE_URL) +
     "/rest/v1/rpc/complete_vend";
 
-  if (!http.begin(client, url)) return false;
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("POST", "rpc/complete_vend");
+    return false;
+  }
   addSupabaseHeaders(http, true);
 
   StaticJsonDocument<768> doc;
@@ -322,8 +369,10 @@ bool httpCompleteVend(const PendingTx &tx, int &serverStock) {
   String body;
   serializeJson(doc, body);
 
+  logSupabaseRequest("POST", "rpc/complete_vend", body.length());
   int code = http.POST(body);
   String payload = http.getString();
+  logSupabaseResponse("POST", "rpc/complete_vend", code);
 
   Serial.printf("[VEND RPC] HTTP %d | %s\n", code, payload.c_str());
 
@@ -378,7 +427,10 @@ bool httpSyncDeviceHealth() {
 
   String url = String(SUPABASE_URL) + "/rest/v1/rpc/sync_device_telemetry";
 
-  if (!http.begin(client, url)) return false;
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("PATCH", "rpc/sync_device_telemetry");
+    return false;
+  }
   addSupabaseHeaders(http, true);
 
   const DeviceResourceSnapshot resources = readDeviceResourceSnapshot();
@@ -424,8 +476,10 @@ bool httpSyncDeviceHealth() {
   String body;
   serializeJson(doc, body);
 
+  logSupabaseRequest("PATCH", "rpc/sync_device_telemetry", body.length());
   int code = http.PATCH(body);
   String response = http.getString();
+  logSupabaseResponse("PATCH", "rpc/sync_device_telemetry", code);
   http.end();
   StaticJsonDocument<256> ack;
   bool ok = code == 200 && !deserializeJson(ack, response) &&
@@ -446,7 +500,10 @@ bool httpLogMachineAlert(
   HTTPClient http;
   String url = String(SUPABASE_URL) + "/rest/v1/machine_health_logs";
 
-  if (!http.begin(client, url)) return false;
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("POST", "machine_health_logs");
+    return false;
+  }
   addSupabaseHeaders(http, true);
 
   StaticJsonDocument<384> doc;
@@ -456,7 +513,9 @@ bool httpLogMachineAlert(
   String body;
   serializeJson(doc, body);
 
+  logSupabaseRequest("POST", "machine_health_logs", body.length());
   int code = http.POST(body);
+  logSupabaseResponse("POST", "machine_health_logs", code);
   http.end();
 
   return code == 200 || code == 201;
@@ -475,7 +534,10 @@ bool httpPostNotification(
   HTTPClient http;
   String url = String(SUPABASE_URL) + "/rest/v1/notifications";
 
-  if (!http.begin(client, url)) return false;
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("POST", "notifications");
+    return false;
+  }
   addSupabaseHeaders(http, true);
 
   StaticJsonDocument<512> doc;
@@ -487,7 +549,9 @@ bool httpPostNotification(
   String body;
   serializeJson(doc, body);
 
+  logSupabaseRequest("POST", "notifications", body.length());
   int code = http.POST(body);
+  logSupabaseResponse("POST", "notifications", code);
   http.end();
 
   return code == 200 || code == 201;
@@ -507,7 +571,10 @@ bool httpQueueSmsEvent(const SmsEvent &event) {
   String url = String(SUPABASE_URL) +
                "/rest/v1/sms?on_conflict=client_event_id";
 
-  if (!http.begin(client, url)) return false;
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("POST", "sms outbox");
+    return false;
+  }
   addSupabaseHeaders(http, true);
   // A retry with the same client_event_id must not create a second SMS.
   http.addHeader("Prefer", "resolution=ignore-duplicates,return=minimal");
@@ -523,7 +590,9 @@ bool httpQueueSmsEvent(const SmsEvent &event) {
   String body;
   serializeJson(doc, body);
 
+  logSupabaseRequest("POST", "sms outbox", body.length());
   int code = http.POST(body);
+  logSupabaseResponse("POST", "sms outbox", code);
   http.end();
 
   Serial.printf("[SMS] Queue HTTP %d for %s\n",
@@ -541,7 +610,10 @@ bool httpMarkSmsSent(uint32_t smsId) {
   String url = String(SUPABASE_URL) + "/rest/v1/sms?id=eq." +
                String(smsId) + "&status=eq.pending";
 
-  if (!http.begin(client, url)) return false;
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("PATCH", "sms (mark sent)");
+    return false;
+  }
   addSupabaseHeaders(http, true);
   http.addHeader("Prefer", "return=minimal");
 
@@ -550,7 +622,9 @@ bool httpMarkSmsSent(uint32_t smsId) {
   String body;
   serializeJson(doc, body);
 
+  logSupabaseRequest("PATCH", "sms (mark sent)", body.length());
   int code = http.PATCH(body);
+  logSupabaseResponse("PATCH", "sms (mark sent)", code);
   http.end();
 
   // PostgREST returns 204 for a successful minimal PATCH. The request filter
@@ -575,7 +649,10 @@ bool httpRecordSmsFailure(
   String url = String(SUPABASE_URL) + "/rest/v1/sms?id=eq." +
                String(smsId) + "&status=eq.pending";
 
-  if (!http.begin(client, url)) return false;
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("PATCH", "sms (record failure)");
+    return false;
+  }
   addSupabaseHeaders(http, true);
   http.addHeader("Prefer", "return=minimal");
 
@@ -585,7 +662,9 @@ bool httpRecordSmsFailure(
   String body;
   serializeJson(doc, body);
 
+  logSupabaseRequest("PATCH", "sms (record failure)", body.length());
   int code = http.PATCH(body);
+  logSupabaseResponse("PATCH", "sms (record failure)", code);
   http.end();
 
   bool ok = code == 204;
@@ -606,10 +685,15 @@ void httpProcessPendingSms() {
                "&select=id,recipient,message,attempt_count"
                "&order=id.asc&limit=" + String(SMS_PROCESS_BATCH_SIZE);
 
-  if (!http.begin(client, url)) return;
+  logSupabaseRequest("GET", "sms pending queue");
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("GET", "sms pending queue");
+    return;
+  }
   addSupabaseHeaders(http);
 
   int code = http.GET();
+  logSupabaseResponse("GET", "sms pending queue", code);
   if (code != 200) {
     Serial.printf("[SMS] Fetch pending HTTP %d\n", code);
     http.end();

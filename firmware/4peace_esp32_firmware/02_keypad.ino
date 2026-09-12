@@ -68,6 +68,16 @@ char scanKeypadPCF8574() {
 }
 
 void handleKeypress(char key) {
+  // Do not print individual GCash-reference digits to keep payment details
+  // out of the serial log. The length still confirms keypad input is working.
+  if (currentState == STATE_GCASH_INPUT && key >= '0' && key <= '9') {
+    unsigned int nextLength = (unsigned int)gcashRefBuffer.length();
+    if (nextLength < 16) nextLength++;
+    Serial.printf("[KEYPAD] GCash reference digit received (length will be %u)\n", nextLength);
+  } else {
+    Serial.printf("[KEYPAD] Key '%c' in %s\n", key, machineStateName(currentState));
+  }
+
   beepBuzzer(1, 35);
 
   // ----------------------------------------------------------
@@ -77,6 +87,8 @@ void handleKeypress(char key) {
     if (key >= '1' && key <= '5') {
       selectedSlotIndex = key - '1';
       SlotItem &s = slots[selectedSlotIndex];
+      Serial.printf("[SELECT] %s (%s), stock=%d, price=P%.2f\n",
+                    s.slotCode.c_str(), s.productName.c_str(), s.stock, unitPrice);
 
       if (s.stock <= 0) {
         updateLcd(s.slotCode + " Out of Stock", "Choose Another");
@@ -139,6 +151,8 @@ void handleKeypress(char key) {
       }
 
       currentState = STATE_GCASH_INPUT;
+      Serial.printf("[GCASH] Reference entry started for %s, amount=P%.2f\n",
+                    slots[selectedSlotIndex].slotCode.c_str(), unitPrice);
       gcashRefBuffer = "";
       stateTimer = millis();
       updateLcd("Enter GCash Ref", "#Done *=Delete");
@@ -245,6 +259,7 @@ void handleKeypress(char key) {
       );
 
       if (code == 200 || code == 201) {
+        Serial.printf("[GCASH] Reference submitted successfully (HTTP %d); awaiting approval.\n", code);
         currentState = STATE_GCASH_WAITING;
         stateTimer = millis();
         gcashPollTimer = 0;
@@ -252,6 +267,7 @@ void handleKeypress(char key) {
       }
 
       if (code == 409) {
+        Serial.println("[GCASH] Duplicate reference received; checking its existing status.");
         // Existing reference. Resume only if still pending/approved.
         String existing = httpCheckGcashStatus(gcashRefBuffer);
 
@@ -273,6 +289,7 @@ void handleKeypress(char key) {
       }
 
       updateLcd("Submit Failed", "Check Internet");
+      Serial.printf("[GCASH] Reference submission failed (HTTP %d).\n", code);
       beepBuzzer(3, 100);
       return;
     }

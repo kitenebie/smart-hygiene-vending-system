@@ -73,6 +73,8 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
   if (slotIdx < 0 || slotIdx >= 5) return false;
 
   SlotItem &s = slots[slotIdx];
+  Serial.printf("[VEND] Request: slot=%s method=%s stock=%d credit=P%.2f\n",
+                s.slotCode.c_str(), method.c_str(), s.stock, currentCredit);
 
   if (s.stock <= 0) {
     updateLcd("OUT OF STOCK", s.slotCode);
@@ -142,10 +144,13 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
     motorActive = true;
 
     digitalWrite(s.relayPin, RELAY_ACTIVE_LEVEL);
+    Serial.printf("[MOTOR] %s ON (GPIO%d)\n", s.slotCode.c_str(), s.relayPin);
 
     dropConfirmed = waitForNewIrDrop(s.irPin, DISPENSE_TIMEOUT_MS);
 
     digitalWrite(s.relayPin, RELAY_INACTIVE_LEVEL);
+    Serial.printf("[MOTOR] %s OFF | IR drop=%s\n", s.slotCode.c_str(),
+                  dropConfirmed ? "CONFIRMED" : "NOT DETECTED");
 
     motorActive = false;
 
@@ -168,6 +173,8 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
   }
 
   if (!dropConfirmed) {
+    Serial.printf("[VEND] FAILED: %s had no confirmed product drop; payment retained.\n",
+                  s.slotCode.c_str());
     updateLcd("Dispense Failed", "No IR Drop");
     beepBuzzer(4, 120);
 
@@ -210,6 +217,8 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
   s.stock--;
   if (s.stock < 0) s.stock = 0;
   persistStock(slotIdx);
+  Serial.printf("[VEND] SUCCESS: %s dispensed; local stock=%d; credit=P%.2f\n",
+                s.slotCode.c_str(), s.stock, currentCredit);
 
   PendingTx tx;
   tx.txId = makeTransactionId();

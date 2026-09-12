@@ -19,6 +19,8 @@ void updateLcd(const String &line1, const String &line2) {
 
   if (a == last1 && b == last2) return;
 
+  Serial.printf("[LCD] %s | %s\n", a.c_str(), b.c_str());
+
   lcd.setCursor(0, 0);
   lcd.print(a);
   lcd.setCursor(0, 1);

@@ -91,7 +91,10 @@ bool httpSyncPinStatus(JsonArray pins) {
   HTTPClient http;
   String url = String(SUPABASE_URL) + "/rest/v1/rpc/sync_esp32_pin_status";
 
-  if (!http.begin(client, url)) return false;
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("POST", "rpc/sync_esp32_pin_status");
+    return false;
+  }
   addSupabaseHeaders(http, true);
 
   DynamicJsonDocument request(8192);
@@ -102,8 +105,10 @@ bool httpSyncPinStatus(JsonArray pins) {
 
   String body;
   serializeJson(request, body);
+  logSupabaseRequest("POST", "rpc/sync_esp32_pin_status", body.length());
   int code = http.POST(body);
   String response = http.getString();
+  logSupabaseResponse("POST", "rpc/sync_esp32_pin_status", code);
   http.end();
 
   StaticJsonDocument<256> ack;

@@ -247,6 +247,10 @@ float readRailVoltage(int adcPin, float dividerRatio);
 void runPinConnectionDiagnostics();
 void restorePinDiagnosticOutputs();
 
+// Serial monitor helpers
+const char *machineStateName(MachineState state);
+void logMachineState();
+
 // ============================================================================
 // ISR
 // ============================================================================
@@ -283,6 +287,7 @@ void setup() {
   Serial.println();
   Serial.println("===============================================");
   Serial.println("4Peace Vending — FIXED Firmware Starting");
+  Serial.println("[SERIAL] Open Serial Monitor at 115200 baud");
   Serial.println("===============================================");
 
   randomSeed(esp_random());
@@ -321,6 +326,8 @@ void setup() {
 
     // Plain INPUT intentionally. GPIO34/35 do not support internal pull-up.
     pinMode(slots[i].irPin, INPUT);
+    Serial.printf("[HW] %s relay=GPIO%d IR=GPIO%d\n",
+                  slots[i].slotCode.c_str(), slots[i].relayPin, slots[i].irPin);
   }
 
 #if ENABLE_VOLTAGE_MONITOR
@@ -375,6 +382,7 @@ void setup() {
 // ============================================================================
 
 void loop() {
+  logMachineState();
   handleWiFiReconnect();
   handleTamperCheck();
   handleCoinProcessing();
@@ -558,6 +566,43 @@ void loop() {
   }
 
   delay(2);
+}
+
+const char *machineStateName(MachineState state) {
+  switch (state) {
+    case STATE_BOOT: return "BOOT";
+    case STATE_SYNC_CONFIG: return "SYNC_CONFIG";
+    case STATE_IDLE: return "IDLE";
+    case STATE_SLOT_SELECTED: return "SLOT_SELECTED";
+    case STATE_COIN_PAYMENT: return "COIN_PAYMENT";
+    case STATE_GCASH_INPUT: return "GCASH_INPUT";
+    case STATE_GCASH_WAITING: return "GCASH_WAITING";
+    case STATE_DISPENSING: return "DISPENSING";
+    case STATE_SUCCESS: return "SUCCESS";
+    case STATE_ERROR: return "ERROR";
+    default: return "UNKNOWN";
+  }
+}
+
+// Prints only when the user-visible machine state changes, so the monitor
+// remains readable during normal idle operation.
+void logMachineState() {
+  static MachineState lastState = STATE_BOOT;
+  static bool initialized = false;
+
+  if (initialized && currentState == lastState) return;
+
+  initialized = true;
+  lastState = currentState;
+
+  String slot = "none";
+  if (selectedSlotIndex >= 0 && selectedSlotIndex < 5) {
+    slot = slots[selectedSlotIndex].slotCode;
+  }
+
+  Serial.printf("[STATE] %s | slot=%s | credit=P%.2f | wifi=%s\n",
+                machineStateName(currentState), slot.c_str(), currentCredit,
+                WiFi.status() == WL_CONNECTED ? "connected" : "offline");
 }
 
 // ============================================================================
