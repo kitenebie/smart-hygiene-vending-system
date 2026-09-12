@@ -28,7 +28,9 @@ const titles: Record<View, [string, string]> = {
 export default function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [unreadCount, setUnreadCount] = useState(0);
-  const [esp32LastSync, setEsp32LastSync] = useState<string | null>(null);
+  const [legacyEsp32LastSeen, setLegacyEsp32LastSeen] = useState<string | null>(null);
+  const [heartbeatLastSeen, setHeartbeatLastSeen] = useState<string | null>(null);
+  const [heartbeatAvailable, setHeartbeatAvailable] = useState(false);
 
   const requestedView = searchParams.get('view');
   const activeView: View = requestedView && requestedView in titles
@@ -44,7 +46,7 @@ export default function DashboardPage() {
   // communicating with Supabase. Polling also marks it waiting when stale.
   usePolling(loadEsp32Status, 15000);
   useRealtimeRefresh(['notifications'], loadBadge);
-  useRealtimeRefresh(['device_health', 'esp32_pin_status'], loadEsp32Status);
+  useRealtimeRefresh(['device_health', 'esp32_pin_status', 'esp32_device_presence'], loadEsp32Status);
 
   async function loadBadge() {
     const { data } = await supabase
@@ -55,12 +57,17 @@ export default function DashboardPage() {
   }
 
   async function loadEsp32Status() {
-    const [healthResult, pinStatusResult] = await Promise.all([
+    const [healthResult, heartbeatResult, pinStatusResult] = await Promise.all([
       supabase
         .from('device_health')
         .select('last_sync')
         .order('id', { ascending: false })
         .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('esp32_device_presence')
+        .select('last_seen')
+        .eq('machine_id', 'VM001')
         .maybeSingle(),
       supabase
         .from('esp32_pin_status')
@@ -78,7 +85,14 @@ export default function DashboardPage() {
       return latest;
     }, null);
 
-    setEsp32LastSync(newestTimestamp);
+    setLegacyEsp32LastSeen(newestTimestamp);
+
+    // Once its migration is applied, the heartbeat is the authoritative
+    // presence signal. Until then, keep the old telemetry/PIN fallback.
+    if (!heartbeatResult.error) {
+      setHeartbeatAvailable(true);
+      setHeartbeatLastSeen(heartbeatResult.data?.last_seen ?? null);
+    }
   }
 
   const handleUnreadChange = useCallback((count: number) => {
@@ -87,8 +101,10 @@ export default function DashboardPage() {
   }, []);
 
   const [title, subtitle] = titles[activeView];
-  const esp32Connected = esp32LastSync !== null &&
-    Date.now() - new Date(esp32LastSync).getTime() < 150000;
+  const esp32LastSeen = heartbeatAvailable ? heartbeatLastSeen : legacyEsp32LastSeen;
+  const presenceTimeoutMs = heartbeatAvailable ? 25000 : 150000;
+  const esp32Connected = esp32LastSeen !== null &&
+    Date.now() - new Date(esp32LastSeen).getTime() < presenceTimeoutMs;
 
   return (
     <div className="app">
@@ -98,7 +114,7 @@ export default function DashboardPage() {
           title={title}
           subtitle={subtitle}
           esp32Connected={esp32Connected}
-          lastSync={esp32LastSync}
+          lastSync={esp32LastSeen}
         />
         <div className="content">
           {activeView === 'overview' && <OverviewView />}

@@ -154,6 +154,7 @@ String gcashRefBuffer = "";
 unsigned long stateTimer = 0;
 unsigned long gcashPollTimer = 0;
 unsigned long lastHealthSyncTime = 0;
+unsigned long lastDeviceHeartbeatTime = 0;
 unsigned long lastConfigSyncTime = 0;
 unsigned long lastPinMonitorControlTime = 0;
 unsigned long lastPinDiagnosticTime = 0;
@@ -225,6 +226,7 @@ int httpSubmitGcashPayment(const String &refCode, int slotId, float amount);
 String httpCheckGcashStatus(const String &refCode);
 bool httpCompleteVend(const PendingTx &tx, int &serverStock);
 bool httpSyncDeviceHealth();
+bool httpHeartbeatDevice();
 DeviceResourceSnapshot readDeviceResourceSnapshot();
 bool httpLogMachineAlert(const String &level, const String &message);
 bool httpPostNotification(const String &type, const String &level, const String &message);
@@ -398,6 +400,15 @@ void loop() {
     lastHealthSyncTime = millis();
     gsmSignalPct = gsmGetSignalStrength();
     httpSyncDeviceHealth();
+  }
+
+  // This lightweight heartbeat is intentionally separate from health telemetry.
+  // It gives the dashboard a prompt online/offline signal without creating a
+  // resource-history row every few seconds.
+  if (WiFi.status() == WL_CONNECTED &&
+      millis() - lastDeviceHeartbeatTime >= DEVICE_HEARTBEAT_INTERVAL_MS) {
+    lastDeviceHeartbeatTime = millis();
+    httpHeartbeatDevice();
   }
 
   // This setting-only read gives the dashboard switch a fast response.

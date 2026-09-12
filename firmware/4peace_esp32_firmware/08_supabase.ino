@@ -417,6 +417,41 @@ DeviceResourceSnapshot readDeviceResourceSnapshot() {
   return snapshot;
 }
 
+bool httpHeartbeatDevice() {
+  if (WiFi.status() != WL_CONNECTED) return false;
+
+  WiFiClientSecure client;
+  configureSecureClient(client);
+  HTTPClient http;
+  String url = String(SUPABASE_URL) + "/rest/v1/rpc/heartbeat_esp32";
+
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("POST", "rpc/heartbeat_esp32");
+    return false;
+  }
+  addSupabaseHeaders(http, true);
+
+  StaticJsonDocument<256> doc;
+  doc["p_device_key"] = DEVICE_API_KEY;
+  doc["p_machine_id"] = MACHINE_ID;
+
+  String body;
+  serializeJson(doc, body);
+  logSupabaseRequest("POST", "rpc/heartbeat_esp32", body.length());
+  int code = http.POST(body);
+  String response = http.getString();
+  logSupabaseResponse("POST", "rpc/heartbeat_esp32", code);
+  http.end();
+
+  StaticJsonDocument<192> ack;
+  DeserializationError parseError = deserializeJson(ack, response);
+  bool ok = code == 200 && !parseError && (ack["success"] | false);
+  const char *message = ack["message"] | (parseError ? "invalid JSON response" : "");
+  Serial.printf("[HEARTBEAT] %s (HTTP %d)%s%s\n", ok ? "sent" : "failed", code,
+                message[0] ? ": " : "", message);
+  return ok;
+}
+
 bool httpSyncDeviceHealth() {
   if (WiFi.status() != WL_CONNECTED) return false;
 
