@@ -428,7 +428,7 @@ bool httpSyncDeviceHealth() {
   String url = String(SUPABASE_URL) + "/rest/v1/rpc/sync_device_telemetry";
 
   if (!http.begin(client, url)) {
-    logSupabaseBeginFailure("PATCH", "rpc/sync_device_telemetry");
+    logSupabaseBeginFailure("POST", "rpc/sync_device_telemetry");
     return false;
   }
   addSupabaseHeaders(http, true);
@@ -476,15 +476,21 @@ bool httpSyncDeviceHealth() {
   String body;
   serializeJson(doc, body);
 
-  logSupabaseRequest("PATCH", "rpc/sync_device_telemetry", body.length());
-  int code = http.PATCH(body);
+  // PostgREST RPC functions are invoked with POST. PATCH is only for table
+  // rows and causes this telemetry RPC to be rejected before it can update
+  // device_health or create a device_resource_logs sample.
+  logSupabaseRequest("POST", "rpc/sync_device_telemetry", body.length());
+  int code = http.POST(body);
   String response = http.getString();
-  logSupabaseResponse("PATCH", "rpc/sync_device_telemetry", code);
+  logSupabaseResponse("POST", "rpc/sync_device_telemetry", code);
   http.end();
   StaticJsonDocument<256> ack;
-  bool ok = code == 200 && !deserializeJson(ack, response) &&
-            (ack["success"] | false);
-  Serial.printf("[HEALTH] HTTP %d, authenticated=%s\n", code, ok ? "yes" : "no");
+  DeserializationError parseError = deserializeJson(ack, response);
+  bool ok = code == 200 && !parseError && (ack["success"] | false);
+  const char *message = ack["message"] | (parseError ? "invalid JSON response" : "");
+  Serial.printf("[HEALTH] Telemetry sync %s (HTTP %d)%s%s\n",
+                ok ? "SUCCESS" : "FAILED", code,
+                message[0] ? ": " : "", message);
   return ok;
 }
 
