@@ -40,11 +40,11 @@ export default function DashboardPage() {
   };
 
   usePolling(loadBadge, 20000);
-  // The ESP32 reports health once per minute. Polling also turns the status
-  // back to "Waiting" if the last report becomes stale while the tab is open.
+  // A fresh health sync or PIN-diagnostic sync both prove that the ESP32 is
+  // communicating with Supabase. Polling also marks it waiting when stale.
   usePolling(loadEsp32Status, 15000);
   useRealtimeRefresh(['notifications'], loadBadge);
-  useRealtimeRefresh(['device_health'], loadEsp32Status);
+  useRealtimeRefresh(['device_health', 'esp32_pin_status'], loadEsp32Status);
 
   async function loadBadge() {
     const { data } = await supabase
@@ -55,14 +55,30 @@ export default function DashboardPage() {
   }
 
   async function loadEsp32Status() {
-    const { data } = await supabase
-      .from('device_health')
-      .select('last_sync')
-      .order('id', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const [healthResult, pinStatusResult] = await Promise.all([
+      supabase
+        .from('device_health')
+        .select('last_sync')
+        .order('id', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('esp32_pin_status')
+        .select('updated_at')
+        .eq('machine_id', 'VM001')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
-    setEsp32LastSync(data?.last_sync ?? null);
+    const timestamps = [healthResult.data?.last_sync, pinStatusResult.data?.updated_at]
+      .filter((timestamp): timestamp is string => Boolean(timestamp));
+    const newestTimestamp = timestamps.reduce<string | null>((latest, timestamp) => {
+      if (!latest || new Date(timestamp).getTime() > new Date(latest).getTime()) return timestamp;
+      return latest;
+    }, null);
+
+    setEsp32LastSync(newestTimestamp);
   }
 
   const handleUnreadChange = useCallback((count: number) => {
