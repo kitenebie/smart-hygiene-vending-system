@@ -21,7 +21,14 @@ interface ResourceSample {
   collected_at: string;
 }
 
+interface TemperaturePoint {
+  timestamp: number;
+  value: number;
+}
+
 const toKiB = (bytes: number) => Math.round(Number(bytes ?? 0) / 1024);
+const TELEMETRY_MINUTE_MS = 60_000;
+const TEMPERATURE_WINDOW_MS = 6 * 60 * 60 * 1000;
 const formatBytes = (bytes: number) => {
   const value = Number(bytes ?? 0);
   if (value < 1024) return `${value} B`;
@@ -31,6 +38,35 @@ const formatBytes = (bytes: number) => {
 const timeLabel = (timestamp: string) => new Date(timestamp).toLocaleTimeString([], {
   hour: '2-digit', minute: '2-digit', second: '2-digit',
 });
+
+const minuteStart = (timestamp: number) => Math.floor(timestamp / TELEMETRY_MINUTE_MS) * TELEMETRY_MINUTE_MS;
+
+// The firmware normally saves one resource sample per minute. Fill every
+// missing minute with 0°C so an ESP32 power/Wi-Fi outage is visible as a
+// zero-valued gap instead of a misleading line between old and new readings.
+function buildTemperatureTimeline(samples: ResourceSample[]): TemperaturePoint[] {
+  const reportedMinutes = new Map<number, number>();
+
+  for (const sample of samples) {
+    if (sample.cpu_temperature_c === null) continue;
+    const timestamp = new Date(sample.collected_at).getTime();
+    if (!Number.isFinite(timestamp)) continue;
+    reportedMinutes.set(minuteStart(timestamp), Number(sample.cpu_temperature_c));
+  }
+
+  if (reportedMinutes.size === 0) return [];
+
+  const currentMinute = minuteStart(Date.now());
+  const firstReportedMinute = Math.min(...reportedMinutes.keys());
+  const startMinute = Math.max(firstReportedMinute, currentMinute - TEMPERATURE_WINDOW_MS);
+  const timeline: TemperaturePoint[] = [];
+
+  for (let timestamp = startMinute; timestamp <= currentMinute; timestamp += TELEMETRY_MINUTE_MS) {
+    timeline.push({ timestamp, value: reportedMinutes.get(timestamp) ?? 0 });
+  }
+
+  return timeline;
+}
 
 export default function HealthView() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
@@ -46,7 +82,9 @@ export default function HealthView() {
       const [{ data: h, error: healthError }, { data: logRows, error: logsError }, { data: resourceRows, error: resourcesError }] = await Promise.all([
         supabase.from('device_health').select('*').order('id', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('machine_health_logs').select('*').order('created_at', { ascending: false }).limit(10),
-        supabase.from('device_resource_logs').select('*').order('collected_at', { ascending: false }).limit(60),
+        // Six hours of once-per-minute samples lets the chart render offline
+        // gaps instead of losing them after the most recent 60 readings.
+        supabase.from('device_resource_logs').select('*').order('collected_at', { ascending: false }).limit(360),
       ]);
       if (healthError || logsError || resourcesError) throw healthError ?? logsError ?? resourcesError;
 
@@ -92,15 +130,15 @@ export default function HealthView() {
     { name: 'External PSRAM', data: history.map(sample => toKiB(sample.external_psram_free_bytes)) },
   ];
 
-  const temperatureHistory = history.filter(sample => sample.cpu_temperature_c !== null);
+  const temperatureTimeline = buildTemperatureTimeline(history);
   const temperatureOptions: ApexOptions = {
     chart: { type: 'line', background: 'transparent', foreColor: '#9b939e', toolbar: { show: false }, zoom: { enabled: false } },
-    colors: ['#e0ab4c'], stroke: { curve: 'smooth', width: 3 }, dataLabels: { enabled: false },
-    grid: { borderColor: '#252229', strokeDashArray: 3 }, xaxis: { categories: temperatureHistory.map(sample => timeLabel(sample.collected_at)) },
+    colors: ['#e0ab4c'], stroke: { curve: 'straight', width: 3 }, dataLabels: { enabled: false },
+    grid: { borderColor: '#252229', strokeDashArray: 3 }, xaxis: { categories: temperatureTimeline.map(point => timeLabel(new Date(point.timestamp).toISOString())) },
     yaxis: { title: { text: 'Temperature (°C)' }, labels: { formatter: value => `${value.toFixed(1)}°C` } },
-    tooltip: { theme: 'dark', y: { formatter: value => `${value.toFixed(1)}°C` } },
+    tooltip: { theme: 'dark', y: { formatter: value => value === 0 ? '0°C — no ESP32 telemetry' : `${value.toFixed(1)}°C` } },
   };
-  const temperatureSeries = [{ name: 'Internal CPU temperature', data: temperatureHistory.map(sample => Number(sample.cpu_temperature_c)) }];
+  const temperatureSeries = [{ name: 'Internal CPU temperature', data: temperatureTimeline.map(point => point.value) }];
 
   const externalFlashFree = latestResources
     ? Math.max(0, latestResources.external_flash_total_bytes - latestResources.external_flash_used_bytes - latestResources.filesystem_total_bytes)
@@ -141,8 +179,8 @@ export default function HealthView() {
       </div>
 
       <div className="panel" style={{ marginTop: 20 }}>
-        <div className="panel-head"><div><div className="panel-title display">ESP32 internal CPU temperature</div><div className="panel-title-sub">On-chip temperature sensor history</div></div></div>
-        <div className="chart-body">{temperatureHistory.length ? <Chart options={temperatureOptions} series={temperatureSeries} type="line" height={260} /> : <div className="empty-note">Waiting for a CPU-temperature telemetry sample.</div>}</div>
+        <div className="panel-head"><div><div className="panel-title display">ESP32 internal CPU temperature</div><div className="panel-title-sub">On-chip temperature history · 0°C means no ESP32 telemetry for that minute</div></div></div>
+        <div className="chart-body">{temperatureTimeline.length ? <Chart options={temperatureOptions} series={temperatureSeries} type="line" height={260} /> : <div className="empty-note">Waiting for a CPU-temperature telemetry sample.</div>}</div>
       </div>
 
       <div className="panel" style={{ marginTop: 20 }}>
