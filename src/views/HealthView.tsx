@@ -29,6 +29,7 @@ interface TemperaturePoint {
 const toKiB = (bytes: number) => Math.round(Number(bytes ?? 0) / 1024);
 const TELEMETRY_MINUTE_MS = 60_000;
 const TEMPERATURE_WINDOW_MS = 6 * 60 * 60 * 1000;
+const OFFLINE_AFTER_MS = 3 * TELEMETRY_MINUTE_MS;
 const formatBytes = (bytes: number) => {
   const value = Number(bytes ?? 0);
   if (value < 1024) return `${value} B`;
@@ -41,9 +42,10 @@ const timeLabel = (timestamp: string) => new Date(timestamp).toLocaleTimeString(
 
 const minuteStart = (timestamp: number) => Math.floor(timestamp / TELEMETRY_MINUTE_MS) * TELEMETRY_MINUTE_MS;
 
-// The firmware normally saves one resource sample per minute. Fill every
-// missing minute with 0°C so an ESP32 power/Wi-Fi outage is visible as a
-// zero-valued gap instead of a misleading line between old and new readings.
+// The firmware normally saves one resource sample per minute, but Wi-Fi and
+// HTTP timing can naturally shift a report over a minute boundary. A one- or
+// two-minute gap is therefore interpolated; zero only means telemetry was
+// missing for at least three minutes (a credible offline interval).
 function buildTemperatureTimeline(samples: ResourceSample[]): TemperaturePoint[] {
   const reportedMinutes = new Map<number, number>();
 
@@ -56,13 +58,47 @@ function buildTemperatureTimeline(samples: ResourceSample[]): TemperaturePoint[]
 
   if (reportedMinutes.size === 0) return [];
 
+  const reports = [...reportedMinutes.entries()]
+    .map(([timestamp, value]) => ({ timestamp, value }))
+    .sort((left, right) => left.timestamp - right.timestamp);
   const currentMinute = minuteStart(Date.now());
-  const firstReportedMinute = Math.min(...reportedMinutes.keys());
-  const startMinute = Math.max(firstReportedMinute, currentMinute - TEMPERATURE_WINDOW_MS);
+  const firstReportedMinute = reports[0].timestamp;
+  const lastReportedMinute = reports[reports.length - 1].timestamp;
+  const endMinute = Math.max(currentMinute, lastReportedMinute);
+  const startMinute = Math.max(firstReportedMinute, endMinute - TEMPERATURE_WINDOW_MS);
   const timeline: TemperaturePoint[] = [];
+  let previous: TemperaturePoint | null = null;
+  let nextReportIndex = 0;
 
-  for (let timestamp = startMinute; timestamp <= currentMinute; timestamp += TELEMETRY_MINUTE_MS) {
-    timeline.push({ timestamp, value: reportedMinutes.get(timestamp) ?? 0 });
+  while (nextReportIndex < reports.length && reports[nextReportIndex].timestamp < startMinute) {
+    previous = reports[nextReportIndex];
+    nextReportIndex++;
+  }
+
+  for (let timestamp = startMinute; timestamp <= endMinute; timestamp += TELEMETRY_MINUTE_MS) {
+    const reportedValue = reportedMinutes.get(timestamp);
+    if (reportedValue !== undefined) {
+      const point = { timestamp, value: reportedValue };
+      timeline.push(point);
+      previous = point;
+      while (nextReportIndex < reports.length && reports[nextReportIndex].timestamp <= timestamp) {
+        nextReportIndex++;
+      }
+      continue;
+    }
+
+    const next = reports[nextReportIndex] ?? null;
+    let value = 0;
+
+    if (previous && next && next.timestamp - previous.timestamp <= OFFLINE_AFTER_MS) {
+      const progress = (timestamp - previous.timestamp) / (next.timestamp - previous.timestamp);
+      value = previous.value + (next.value - previous.value) * progress;
+    } else if (previous && !next && timestamp - previous.timestamp <= OFFLINE_AFTER_MS) {
+      // Do not show a false outage while the next scheduled report is pending.
+      value = previous.value;
+    }
+
+    timeline.push({ timestamp, value });
   }
 
   return timeline;
@@ -179,7 +215,7 @@ export default function HealthView() {
       </div>
 
       <div className="panel" style={{ marginTop: 20 }}>
-        <div className="panel-head"><div><div className="panel-title display">ESP32 internal CPU temperature</div><div className="panel-title-sub">On-chip temperature history · 0°C means no ESP32 telemetry for that minute</div></div></div>
+        <div className="panel-head"><div><div className="panel-title display">ESP32 internal CPU temperature</div><div className="panel-title-sub">On-chip temperature history · 0°C means no ESP32 telemetry for 3+ minutes</div></div></div>
         <div className="chart-body">{temperatureTimeline.length ? <Chart options={temperatureOptions} series={temperatureSeries} type="line" height={260} /> : <div className="empty-note">Waiting for a CPU-temperature telemetry sample.</div>}</div>
       </div>
 
