@@ -144,11 +144,25 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
     motorActive = true;
 
     digitalWrite(s.relayPin, RELAY_ACTIVE_LEVEL);
+    delay(10); // Let the ESP32 output latch before reading it back for diagnostics.
+    int relayActiveLevel = digitalRead(s.relayPin);
+    Serial.printf("[RELAY] %s GPIO%d command=%s readback=%s (%s)\n",
+                  s.slotCode.c_str(), s.relayPin,
+                  RELAY_ACTIVE_LEVEL == LOW ? "LOW/ON" : "HIGH/ON",
+                  relayActiveLevel == LOW ? "LOW" : "HIGH",
+                  relayActiveLevel == RELAY_ACTIVE_LEVEL ? "COMMAND OK" : "COMMAND MISMATCH");
     Serial.printf("[MOTOR] %s ON (GPIO%d)\n", s.slotCode.c_str(), s.relayPin);
 
     dropConfirmed = waitForNewIrDrop(s.irPin, DISPENSE_TIMEOUT_MS);
 
     digitalWrite(s.relayPin, RELAY_INACTIVE_LEVEL);
+    delay(10);
+    int relayInactiveLevel = digitalRead(s.relayPin);
+    Serial.printf("[RELAY] %s GPIO%d command=%s readback=%s (%s)\n",
+                  s.slotCode.c_str(), s.relayPin,
+                  RELAY_INACTIVE_LEVEL == LOW ? "LOW/OFF" : "HIGH/OFF",
+                  relayInactiveLevel == LOW ? "LOW" : "HIGH",
+                  relayInactiveLevel == RELAY_INACTIVE_LEVEL ? "COMMAND OK" : "COMMAND MISMATCH");
     Serial.printf("[MOTOR] %s OFF | IR drop=%s\n", s.slotCode.c_str(),
                   dropConfirmed ? "CONFIRMED" : "NOT DETECTED");
 
@@ -267,9 +281,16 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
     queueSmsEvent("low_stock", "4Peace: " + msg);
   }
 
-  updateLcd("Item Dispatched", "Please Take Item");
+  // Keep the completion confirmation visible for five seconds before the
+  // keypad can accept the next payment or slot-selection task. The LCD has
+  // only 16 columns, so the full success message is presented in two screens.
+  Serial.printf("[VEND] Displaying success confirmation for %s (5 seconds).\n",
+                s.productName.c_str());
+  updateLcd(s.productName, "Dispensed");
   beepBuzzer(2, 90);
-  delay(1500);
+  delay(2500);
+  updateLcd("Successfully!", "Please Take Item");
+  delay(2500);
 
   // Reset only session selection/payment buffer.
   selectedSlotIndex = -1;

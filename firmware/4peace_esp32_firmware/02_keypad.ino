@@ -116,6 +116,10 @@ void handleKeypress(char key) {
       if (currentCredit >= unitPrice) {
         currentState = STATE_COIN_PAYMENT;
         stateTimer = millis();
+        updateLcd("Dispensing...", s.productName);
+        Serial.printf("[COIN] Credit P%.2f is enough for %s; starting dispense now.\n",
+                      currentCredit, s.slotCode.c_str());
+        executeDispense(selectedSlotIndex, "coin", "");
         return;
       }
 
@@ -123,8 +127,9 @@ void handleKeypress(char key) {
       stateTimer = millis();
 
       if (currentCredit > 0.0f) {
-        updateLcd(s.slotCode + " P" + String(unitPrice, 0),
-                  "Need P" + String(unitPrice - currentCredit, 0));
+        updateLcd("Not Enough", "Need P" + String(unitPrice - currentCredit, 0));
+        Serial.printf("[COIN] Not enough credits for %s: credit=P%.2f, need=P%.2f more.\n",
+                      s.slotCode.c_str(), currentCredit, unitPrice - currentCredit);
       } else {
         updateLcd(s.slotCode + " P" + String(unitPrice, 0),
                   "B:GCash C:Coin");
@@ -164,10 +169,9 @@ void handleKeypress(char key) {
       stateTimer = millis();
 
       if (currentCredit >= unitPrice) {
-        updateLcd("Credit Complete", "Dispensing...");
+        updateLcd("Dispensing...", slots[selectedSlotIndex].productName);
       } else {
-        updateLcd("Price P" + String(unitPrice, 0),
-                  "Credit P" + String(currentCredit, 0));
+        updateLcd("Not Enough", "Need P" + String(unitPrice - currentCredit, 0));
       }
       return;
     }
@@ -191,6 +195,8 @@ void handleKeypress(char key) {
     if (selectedSlotIndex < 0 && key >= '1' && key <= '5') {
       selectedSlotIndex = key - '1';
       SlotItem &s = slots[selectedSlotIndex];
+      Serial.printf("[COIN] Selected %s (%s): credit=P%.2f, price=P%.2f\n",
+                    s.slotCode.c_str(), s.productName.c_str(), currentCredit, unitPrice);
 
       if (s.stock <= 0) {
         updateLcd(s.slotCode + " Out of Stock", "Choose Another");
@@ -202,6 +208,16 @@ void handleKeypress(char key) {
       } else if (!smsOutboxHasSpace(requiredSmsOutboxSlotsForVend(selectedSlotIndex))) {
         updateLcd("SMS Queue Full", "Sync Required");
         selectedSlotIndex = -1;
+      } else if (currentCredit < unitPrice) {
+        updateLcd("Not Enough", "Need P" + String(unitPrice - currentCredit, 0));
+        Serial.printf("[COIN] Not enough credits for %s: credit=P%.2f, need=P%.2f more.\n",
+                      s.slotCode.c_str(), currentCredit, unitPrice - currentCredit);
+      } else {
+        // Start immediately after slot selection. This avoids relying on a
+        // later loop pass and makes the coin-first flow deterministic.
+        updateLcd("Dispensing...", s.productName);
+        Serial.printf("[COIN] Credit complete; dispensing %s now.\n", s.slotCode.c_str());
+        executeDispense(selectedSlotIndex, "coin", "");
       }
       return;
     }
