@@ -75,6 +75,8 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
   SlotItem &s = slots[slotIdx];
   Serial.printf("[VEND] Request: slot=%s method=%s stock=%d credit=P%.2f\n",
                 s.slotCode.c_str(), method.c_str(), s.stock, currentCredit);
+  logEsp32Event("dispense", "Request for " + s.slotCode + " - " + s.productName +
+                " via " + method + "; stock " + String(s.stock));
 
   if (s.stock <= 0) {
     updateLcd("OUT OF STOCK", s.slotCode);
@@ -111,6 +113,7 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
     updateLcd("IR Sensor Blocked", s.slotCode);
     Serial.printf("[IR] Slot %s sensor already blocked before vend.\n",
                   s.slotCode.c_str());
+    logEsp32Event("ir_sensor", s.slotCode + " sensor blocked before dispense", "warning");
 
     if (WiFi.status() == WL_CONNECTED) {
       httpLogMachineAlert(
@@ -128,6 +131,7 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
 
   currentState = STATE_DISPENSING;
   updateLcd("Dispensing " + s.slotCode, s.productName);
+  logEsp32Event("dispense", "Dispensing " + s.slotCode + " - " + s.productName);
 
   bool dropConfirmed = false;
 
@@ -168,12 +172,24 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
 
     motorActive = false;
 
+    // Upload relay diagnostics only after the motor is off, so a slow network
+    // cannot extend the dispense cycle.
+    logEsp32Event("relay", s.slotCode + " GPIO" + String(s.relayPin) +
+                  " ON command " + (relayActiveLevel == RELAY_ACTIVE_LEVEL ? "confirmed" : "mismatch"),
+                  relayActiveLevel == RELAY_ACTIVE_LEVEL ? "info" : "error");
+    logEsp32Event("relay", s.slotCode + " GPIO" + String(s.relayPin) +
+                  " OFF command " + (relayInactiveLevel == RELAY_INACTIVE_LEVEL ? "confirmed" : "mismatch"),
+                  relayInactiveLevel == RELAY_INACTIVE_LEVEL ? "info" : "error");
+
     // Clear motor-generated vibration history.
     portENTER_CRITICAL(&tamperMux);
     tamperEdgeCount = 0;
     portEXIT_CRITICAL(&tamperMux);
 
-    if (dropConfirmed) break;
+    if (dropConfirmed) {
+      logEsp32Event("ir_sensor", s.slotCode + " product-drop detected");
+      break;
+    }
 
     if (attempt < DISPENSE_RETRY_COUNT) {
       updateLcd("Retry Dispense", s.slotCode);
@@ -189,6 +205,7 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
   if (!dropConfirmed) {
     Serial.printf("[VEND] FAILED: %s had no confirmed product drop; payment retained.\n",
                   s.slotCode.c_str());
+    logEsp32Event("dispense", s.slotCode + " failed: no IR product-drop confirmation", "error");
     updateLcd("Dispense Failed", "No IR Drop");
     beepBuzzer(4, 120);
 
@@ -233,6 +250,8 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
   persistStock(slotIdx);
   Serial.printf("[VEND] SUCCESS: %s dispensed; local stock=%d; credit=P%.2f\n",
                 s.slotCode.c_str(), s.stock, currentCredit);
+  logEsp32Event("dispense", s.slotCode + " - " + s.productName +
+                " dispensed successfully; stock " + String(s.stock));
 
   PendingTx tx;
   tx.txId = makeTransactionId();

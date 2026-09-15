@@ -1,11 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabase';
 import { timeAgo, parseNumber } from '../utils/helpers';
 import Switch from '../components/Switch';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../hooks/useAuth';
-import { usePolling } from '../hooks/usePolling';
-import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import Esp32PinStatusModal from '../components/Esp32PinStatusModal';
 
 interface Slot { id: number; slot_code: string; product_name: string; capacity: number }
@@ -57,8 +55,11 @@ export default function SettingsView() {
   const [profPhone, setProfPhone] = useState('');
   const [profPassword, setProfPassword] = useState('');
 
-  usePolling(loadAll);
-  useRealtimeRefresh(['admins', 'machine_settings', 'slots'], loadAll);
+  // Settings must not be overwritten while an administrator is typing. This
+  // page deliberately loads once and refreshes only after an explicit save.
+  useEffect(() => {
+    void loadAll();
+  }, []);
 
   async function loadAll() {
     await Promise.all([loadSlots(), loadSettings(), loadProfile()]);

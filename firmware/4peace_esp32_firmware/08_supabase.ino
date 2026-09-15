@@ -6,18 +6,64 @@
 
 // Keep request logs useful without exposing API keys, payment references,
 // phone numbers, or request bodies in the Serial Monitor.
+void logEsp32Event(const String &category, const String &message, const String &level) {
+  Serial.printf("[ESP32 LOG] %s | %s | %s\n", level.c_str(), category.c_str(), message.c_str());
+
+  // Avoid recursive logging: sending a log is itself an HTTP request.
+  if (WiFi.status() != WL_CONNECTED || esp32LogUploadInProgress) return;
+
+  esp32LogUploadInProgress = true;
+  bool saved = httpInsertEsp32Log(level, category, message);
+  esp32LogUploadInProgress = false;
+
+  if (!saved) {
+    Serial.printf("[ESP32 LOG] Supabase save failed for %s.\n", category.c_str());
+  }
+}
+
+bool httpInsertEsp32Log(const String &level, const String &category, const String &message) {
+  WiFiClientSecure client;
+  configureSecureClient(client);
+  HTTPClient http;
+  String url = String(SUPABASE_URL) + "/rest/v1/rpc/write_esp32_log";
+
+  if (!http.begin(client, url)) return false;
+  addSupabaseHeaders(http, true);
+  http.setTimeout(3000);
+
+  StaticJsonDocument<896> doc;
+  doc["p_device_key"] = DEVICE_API_KEY;
+  doc["p_machine_id"] = MACHINE_ID;
+  doc["p_level"] = level;
+  doc["p_category"] = category;
+  doc["p_message"] = message;
+
+  String body;
+  serializeJson(doc, body);
+  int code = http.POST(body);
+  String response = http.getString();
+  http.end();
+
+  StaticJsonDocument<128> ack;
+  return code == 200 && !deserializeJson(ack, response) && (ack["success"] | false);
+}
+
 void logSupabaseRequest(const char *method, const char *endpoint, size_t bodyBytes = 0) {
   Serial.printf("[HTTP] %s Supabase %s", method, endpoint);
   if (bodyBytes > 0) Serial.printf(" | body=%u bytes", (unsigned int)bodyBytes);
   Serial.println();
+  logEsp32Event("supabase_request", String(method) + " " + endpoint);
 }
 
 void logSupabaseResponse(const char *method, const char *endpoint, int statusCode) {
   Serial.printf("[HTTP] %s Supabase %s -> HTTP %d\n", method, endpoint, statusCode);
+  logEsp32Event("supabase_response", String(method) + " " + endpoint + " -> HTTP " + String(statusCode),
+                statusCode >= 400 ? "error" : "info");
 }
 
 void logSupabaseBeginFailure(const char *method, const char *endpoint) {
   Serial.printf("[HTTP] %s Supabase %s -> connection setup FAILED\n", method, endpoint);
+  logEsp32Event("supabase_response", String(method) + " " + endpoint + " -> connection setup failed", "error");
 }
 
 void configureSecureClient(WiFiClientSecure &client) {
@@ -113,6 +159,10 @@ bool httpFetchConfig() {
   if (previousPinDetection && !pinConnectionDetectionEnabled) {
     restorePinDiagnosticOutputs();
   }
+  if (previousPinDetection != pinConnectionDetectionEnabled) {
+    logEsp32Event("pin_diagnostics", String("PIN connection detection ") +
+                  (pinConnectionDetectionEnabled ? "enabled" : "disabled"));
+  }
 
   Serial.printf(
     "[CONFIG] Price P%.2f | LowStock %d | Tamper %s\n",
@@ -151,6 +201,10 @@ bool httpFetchPinMonitoringState() {
   bool enabled = doc[0]["enable_pin_connection_detection"] | false;
   if (pinConnectionDetectionEnabled && !enabled) {
     restorePinDiagnosticOutputs();
+  }
+  if (pinConnectionDetectionEnabled != enabled) {
+    logEsp32Event("pin_diagnostics", String("PIN connection detection ") +
+                  (enabled ? "enabled" : "disabled"));
   }
   pinConnectionDetectionEnabled = enabled;
   return true;
@@ -265,7 +319,7 @@ int httpSubmitGcashPayment(
     httpPostNotification(
       "gcash",
       "info",
-      "New GCash ref " + refCode + " awaiting approval"
+      "New GCash ref " + maskGcashReference(refCode) + " awaiting approval"
     );
   }
 

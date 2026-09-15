@@ -67,6 +67,25 @@ char scanKeypadPCF8574() {
   return '\0';
 }
 
+// Keep the real reference for payment verification, but show only a safe
+// preview anywhere a user, Serial Monitor, or cloud log can see it.
+String maskGcashReference(const String &reference) {
+  const size_t length = reference.length();
+  size_t hiddenLength = 0;
+  if (length <= 2) hiddenLength = length;
+  else if (length <= 6) hiddenLength = length - 2;
+  else hiddenLength = length - 6;
+
+  String hidden = "";
+  for (size_t i = 0; i < hiddenLength; i++) hidden += '*';
+
+  if (length <= 2) return hidden;
+  if (length <= 6) {
+    return reference.substring(0, 1) + hidden + reference.substring(length - 1);
+  }
+  return reference.substring(0, 3) + hidden + reference.substring(length - 3);
+}
+
 void handleKeypress(char key) {
   // Do not print individual GCash-reference digits to keep payment details
   // out of the serial log. The length still confirms keypad input is working.
@@ -89,6 +108,8 @@ void handleKeypress(char key) {
       SlotItem &s = slots[selectedSlotIndex];
       Serial.printf("[SELECT] %s (%s), stock=%d, price=P%.2f\n",
                     s.slotCode.c_str(), s.productName.c_str(), s.stock, unitPrice);
+      logEsp32Event("product_selected", s.slotCode + " - " + s.productName +
+                    "; stock " + String(s.stock) + "; price P" + String(unitPrice, 2));
 
       if (s.stock <= 0) {
         updateLcd(s.slotCode + " Out of Stock", "Choose Another");
@@ -197,6 +218,8 @@ void handleKeypress(char key) {
       SlotItem &s = slots[selectedSlotIndex];
       Serial.printf("[COIN] Selected %s (%s): credit=P%.2f, price=P%.2f\n",
                     s.slotCode.c_str(), s.productName.c_str(), currentCredit, unitPrice);
+      logEsp32Event("product_selected", s.slotCode + " - " + s.productName +
+                    "; coin credit P" + String(currentCredit, 2));
 
       if (s.stock <= 0) {
         updateLcd(s.slotCode + " Out of Stock", "Choose Another");
@@ -212,11 +235,14 @@ void handleKeypress(char key) {
         updateLcd("Not Enough", "Need P" + String(unitPrice - currentCredit, 0));
         Serial.printf("[COIN] Not enough credits for %s: credit=P%.2f, need=P%.2f more.\n",
                       s.slotCode.c_str(), currentCredit, unitPrice - currentCredit);
+        logEsp32Event("coin", "Not enough credit for " + s.slotCode + "; need P" +
+                      String(unitPrice - currentCredit, 2), "warning");
       } else {
         // Start immediately after slot selection. This avoids relying on a
         // later loop pass and makes the coin-first flow deterministic.
         updateLcd("Dispensing...", s.productName);
         Serial.printf("[COIN] Credit complete; dispensing %s now.\n", s.slotCode.c_str());
+        logEsp32Event("dispense", "Credit complete; starting " + s.slotCode + " - " + s.productName);
         executeDispense(selectedSlotIndex, "coin", "");
       }
       return;
@@ -240,7 +266,7 @@ void handleKeypress(char key) {
       if (gcashRefBuffer.length() < 16) {
         gcashRefBuffer += key;
       }
-      updateLcd("Ref:" + gcashRefBuffer, "#Done *=Delete");
+      updateLcd("GCash Reference", maskGcashReference(gcashRefBuffer));
       stateTimer = millis();
       return;
     }
@@ -249,7 +275,7 @@ void handleKeypress(char key) {
       if (gcashRefBuffer.length() > 0) {
         gcashRefBuffer.remove(gcashRefBuffer.length() - 1);
       }
-      updateLcd("Ref:" + gcashRefBuffer, "#Done *=Delete");
+      updateLcd("GCash Reference", maskGcashReference(gcashRefBuffer));
       stateTimer = millis();
       return;
     }
@@ -266,7 +292,7 @@ void handleKeypress(char key) {
         return;
       }
 
-      updateLcd("Submitting Ref", gcashRefBuffer);
+      updateLcd("Submitting Ref", maskGcashReference(gcashRefBuffer));
 
       int code = httpSubmitGcashPayment(
         gcashRefBuffer,

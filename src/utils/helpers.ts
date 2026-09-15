@@ -14,6 +14,13 @@ export function timeAgo(dateStr: string): string {
   return Math.floor(diff / 86400) + ' day(s) ago';
 }
 
+// UI-safe payment-reference preview: 1234567890 becomes 123****890.
+export function maskPaymentReference(reference: string): string {
+  if (reference.length <= 2) return '*'.repeat(reference.length);
+  if (reference.length <= 6) return `${reference.slice(0, 1)}${'*'.repeat(reference.length - 2)}${reference.slice(-1)}`;
+  return `${reference.slice(0, 3)}${'*'.repeat(reference.length - 6)}${reference.slice(-3)}`;
+}
+
 // ─── Format uptime seconds → "6d 14h" ────────────────────────────────────────
 export function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);

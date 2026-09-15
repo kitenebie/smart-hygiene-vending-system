@@ -166,6 +166,7 @@ int gsmSignalPct = -1;
 volatile bool motorActive = false;
 bool filesystemMounted = false;
 bool pinConnectionDetectionEnabled = false;
+bool esp32LogUploadInProgress = false;
 
 // ============================================================================
 // Interrupt-shared data
@@ -192,6 +193,7 @@ void beepBuzzer(int count, int durationMs = 80);
 char scanKeypadPCF8574();
 char scanKeypadRaw();
 void handleKeypress(char key);
+String maskGcashReference(const String &reference);
 
 // Coin / tamper
 void handleCoinProcessing();
@@ -234,6 +236,7 @@ bool httpQueueSmsEvent(const SmsEvent &event);
 void httpProcessPendingSms();
 bool httpMarkSmsSent(uint32_t smsId);
 bool httpRecordSmsFailure(uint32_t smsId, int nextAttemptCount, const String &error);
+bool httpInsertEsp32Log(const String &level, const String &category, const String &message);
 void addSupabaseHeaders(HTTPClient &http, bool json = false);
 void configureSecureClient(WiFiClientSecure &client);
 
@@ -252,6 +255,7 @@ void restorePinDiagnosticOutputs();
 // Serial monitor helpers
 const char *machineStateName(MachineState state);
 void logMachineState();
+void logEsp32Event(const String &category, const String &message, const String &level = "info");
 
 // ============================================================================
 // ISR
@@ -361,6 +365,7 @@ void setup() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("[WiFi] Connected: ");
     Serial.println(WiFi.localIP());
+    logEsp32Event("wifi", "Connected to Wi-Fi; IP " + WiFi.localIP().toString());
 
     // Replay offline sales FIRST, then fetch server stock.
     syncPendingTransactions();
@@ -614,6 +619,8 @@ void logMachineState() {
   Serial.printf("[STATE] %s | slot=%s | credit=P%.2f | wifi=%s\n",
                 machineStateName(currentState), slot.c_str(), currentCredit,
                 WiFi.status() == WL_CONNECTED ? "connected" : "offline");
+  logEsp32Event("machine_state", String(machineStateName(currentState)) +
+                "; slot=" + slot + "; credit=P" + String(currentCredit, 2));
 }
 
 // ============================================================================

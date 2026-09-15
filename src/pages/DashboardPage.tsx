@@ -8,12 +8,13 @@ import TransactionsView from '../views/TransactionsView';
 import HealthView from '../views/HealthView';
 import NotificationsView from '../views/NotificationsView';
 import SmsLogsView from '../views/SmsLogsView';
+import Esp32LogsView from '../views/Esp32LogsView';
 import SettingsView from '../views/SettingsView';
 import { supabase } from '../utils/supabase';
 import { usePolling } from '../hooks/usePolling';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 
-type View = 'overview' | 'slots' | 'transactions' | 'health' | 'notifications' | 'sms_logs' | 'settings';
+type View = 'overview' | 'slots' | 'transactions' | 'health' | 'notifications' | 'sms_logs' | 'esp32_logs' | 'settings';
 
 const titles: Record<View, [string, string]> = {
   overview:      ['Overview', 'Snapshot of the machine right now'],
@@ -22,6 +23,7 @@ const titles: Record<View, [string, string]> = {
   health:        ['Device Health', 'Real-time sensor and power diagnostics'],
   notifications: ['Notifications', 'Stock, coin box, tamper, GCash and system alerts'],
   sms_logs:      ['SMS Logs', 'Real-time queue and delivery history for the admin phone number'],
+  esp32_logs:    ['ESP32 Logs', 'Live machine activity saved by the ESP32'],
   settings:      ['Settings', 'Your account and machine configuration'],
 };
 
@@ -123,6 +125,7 @@ export default function DashboardPage() {
           {activeView === 'health' && <HealthView />}
           {activeView === 'notifications' && <NotificationsView onUnreadChange={handleUnreadChange} />}
           {activeView === 'sms_logs' && <SmsLogsView />}
+          {activeView === 'esp32_logs' && <Esp32LogsView />}
           {activeView === 'settings' && <SettingsView />}
         </div>
       </main>

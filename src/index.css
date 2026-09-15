@@ -168,6 +168,7 @@ button{font-family:inherit; cursor:pointer; border:none; background:none;}
 .tag.approved{background:var(--sage-bg); color:var(--sage);}
 .tag.rejected{background:var(--rust-bg); color:var(--rust);}
 .tag.sent{background:var(--sage-bg); color:var(--sage);}
+.tag.failed{background:var(--rust-bg); color:var(--rust);}
 .gcash-actions{display:flex; gap:8px;}
 .btn.small{padding:6px 12px; font-size:12px;}
 .btn.approve{background:var(--sage); color:#0d1a0d;}

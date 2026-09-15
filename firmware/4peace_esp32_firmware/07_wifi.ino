@@ -26,6 +26,7 @@ void handleWiFiReconnect() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("[WiFi] Reconnected: ");
     Serial.println(WiFi.localIP());
+    logEsp32Event("wifi", "Reconnected to Wi-Fi; IP " + WiFi.localIP().toString());
 
     syncPendingTransactions();
     syncPendingSmsOutbox();

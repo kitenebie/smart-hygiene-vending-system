@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { supabase } from '../utils/supabase';
-import { timeAgo, downloadCSV } from '../utils/helpers';
+import { timeAgo, downloadCSV, maskPaymentReference } from '../utils/helpers';
 import SlotTag from '../components/SlotTag';
 import { useToast } from '../components/Toast';
 
@@ -89,8 +89,8 @@ export default function TransactionsView() {
         type: 'gcash',
         level: action === 'approve' ? 'info' : 'warning',
         message: action === 'approve'
-          ? `GCash reference ${payment.ref_code} approved — dispense allowed`
-          : `GCash reference ${payment.ref_code} rejected — no matching SMS found`,
+          ? `GCash reference ${maskPaymentReference(payment.ref_code)} approved — dispense allowed`
+          : `GCash reference ${maskPaymentReference(payment.ref_code)} rejected — no matching SMS found`,
       });
 
       showToast(action === 'approve' ? 'GCash reference approved.' : 'GCash reference rejected.');
@@ -130,7 +130,7 @@ export default function TransactionsView() {
           <tbody>
             {gcash.length ? gcash.map(g => (
               <tr key={g.id}>
-                <td className="slot-id">{g.ref_code}</td>
+                <td className="slot-id">{maskPaymentReference(g.ref_code)}</td>
                 <td className="slot-id">{(g.slots as { slot_code: string } | null)?.slot_code ?? '—'}</td>
                 <td className="tx-amount">₱{Number(g.amount).toFixed(2)}</td>
                 <td className="tx-time">{timeAgo(g.created_at)}</td>
@@ -167,7 +167,7 @@ export default function TransactionsView() {
           <tbody>
             {txs.length ? txs.map(t => (
               <tr key={t.id}>
-                <td className="slot-id">{t.ref_code}</td>
+                <td className="slot-id">{t.method === 'gcash' ? maskPaymentReference(t.ref_code) : t.ref_code}</td>
                 <td>
                   <div className="tx-method">
                     <div className={`method-chip ${t.method}`}>{t.method === 'gcash' ? 'G' : '₱'}</div>

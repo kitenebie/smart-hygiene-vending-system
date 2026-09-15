@@ -20,6 +20,13 @@ void updateLcd(const String &line1, const String &line2) {
   if (a == last1 && b == last2) return;
 
   Serial.printf("[LCD] %s | %s\n", a.c_str(), b.c_str());
+  // Never save a payment-reference screen in the cloud event log.
+  if (line1 == "GCash Reference" || line1 == "Submitting Ref") {
+    // line2 is already masked by maskGcashReference().
+    logEsp32Event("lcd", line1 + " | " + line2);
+  } else {
+    logEsp32Event("lcd", line1 + " | " + line2);
+  }
 
   lcd.setCursor(0, 0);
   lcd.print(a);

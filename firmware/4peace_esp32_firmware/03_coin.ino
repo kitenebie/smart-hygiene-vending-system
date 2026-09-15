@@ -35,6 +35,7 @@ void handleCoinProcessing() {
   if (coinValue <= 0.0f) {
     Serial.printf("[COIN] Rejected invalid pulse train: %lu pulses\n",
                   (unsigned long)pulses);
+    logEsp32Event("coin", "Rejected invalid pulse train: " + String((unsigned long)pulses) + " pulses", "warning");
     updateLcd("Coin Read Error", "Try Again");
     beepBuzzer(3, 60);
     return;
@@ -47,6 +48,8 @@ void handleCoinProcessing() {
 
   Serial.printf("[COIN] %lu pulses -> P%.2f | Credit P%.2f\n",
                 (unsigned long)pulses, coinValue, currentCredit);
+  logEsp32Event("coin", String((unsigned long)pulses) + " pulses -> P" +
+                String(coinValue, 2) + "; credit P" + String(currentCredit, 2));
 
   beepBuzzer(1, 60);
 
