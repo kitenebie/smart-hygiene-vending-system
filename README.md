@@ -23,6 +23,17 @@
 
 ---
 
+## ✨ Recent ESP32, Dashboard & Inventory Updates
+
+- **Reliable ESP32 presence:** the firmware sends an authenticated heartbeat every 10 seconds. The dashboard shows **ESP32 connected** only while the latest heartbeat is fresh (25 seconds); otherwise it shows **Waiting for ESP32**.
+- **Telemetry repair and CPU history:** health data is sent through `sync_device_telemetry` using `POST`, which restores the `device_health` row if it was cleared. The CPU-temperature graph avoids false `0°C` dips for brief missing samples and shows `0°C` only after at least three consecutive minutes without telemetry. Its header also shows the highest real recorded temperature.
+- **Traceable ESP32 logs:** Wi-Fi, Supabase HTTP requests/responses, payment selection, coins, relays, IR drop detection, dispense outcomes, and LCD messages are stored in `esp32_logs` with a server timestamp and displayed on the new **ESP32 Logs** page.
+- **Safer vending flow:** coin payments enforce sufficient credit before vending, relay output is read back for diagnostics, IR confirms the product drop, and a successful vend locks payment input while the LCD shows **Dispensed Successfully** for five seconds.
+- **Privacy and admin safety:** GCash references are masked in the LCD, logs, and dashboard (for example `1234567890` becomes `123****890`). Settings no longer auto-refresh or subscribe in real time, preventing an administrator's unsaved edits from being overwritten.
+- **Restocking from the dashboard:** each product has an **Add stock** action with a quantity modal. The database RPC validates the input and never allows stock to exceed slot capacity.
+
+---
+
 ## 🏗️ System Architecture & Overview
 
 The 4Peace system bridges physical automated dispensing hardware with a high-performance cloud monitoring dashboard:
@@ -96,7 +107,7 @@ The 4Peace system bridges physical automated dispensing hardware with a high-per
 ### B. GCash Payment & Verification Workflow
 1. User selects a slot on the keypad and chooses **GCash Payment**.
 2. User scans the machine's printed GCash QR code and pays on their phone.
-3. User enters the **GCash Reference Number** (e.g., `GC-99231`) via the 4x4 keypad.
+3. User enters the **GCash Reference Number** (e.g., `GC-99231`) via the 4x4 keypad. The LCD, logs, and dashboard show a masked form only; the unmasked value is used only by the payment workflow.
 4. ESP32 submits the reference to Supabase `gcash_payments` with status `pending`.
 5. A high-priority notification is logged in the `notifications` table.
 6. The Admin checks the **Transactions** view on the web dashboard, verifies the reference against the SMS received by the SIM800L, and clicks **Approve** (or **Reject**).
@@ -111,7 +122,7 @@ The 4Peace system bridges physical automated dispensing hardware with a high-per
 
 ## 🗄️ Database Schema Specification (Supabase / PostgreSQL)
 
-The database schema is structured into 8 relational tables:
+The database includes the primary operational tables below, plus telemetry, presence, SMS, and ESP32 event-log tables introduced by the firmware migrations:
 
 ```
 ┌─────────────────┐       ┌─────────────────┐       ┌──────────────────────┐
@@ -155,6 +166,8 @@ The database schema is structured into 8 relational tables:
 └─────────────────────────┘
 ```
 
+Additional device tables: `device_resource_logs` (minute-level resource and CPU telemetry), `esp32_device_presence` (last authenticated heartbeat), `esp32_logs` (server-timestamped firmware events), and `sms_messages` / `sms_outbox` (GSM message workflow). Device-facing RPCs authenticate the configured `machine_settings.device_api_key` before writing telemetry, heartbeats, pin status, dispense records, or logs.
+
 ---
 
 ## 💻 Frontend Architecture & Component Tree
@@ -188,7 +201,8 @@ react-app/
     │   ├── StatCard.tsx                    # Overview metric cards with delta indicators
     │   ├── SlotTag.tsx                     # Dynamic status badge (ok/low/empty/pending)
     │   ├── Switch.tsx                      # Toggle switch component for settings
-    │   └── Toast.tsx                       # Global toast notification provider
+    │   ├── Toast.tsx                       # Global toast notification provider
+    │   └── Esp32PinStatusModal.tsx          # Per-pin live diagnostics panel
     ├── pages/
     │   ├── LoginPage.tsx                   # Secure administrative login screen
     │   └── DashboardPage.tsx               # Main layout container & view switcher
@@ -196,8 +210,10 @@ react-app/
         ├── OverviewView.tsx                # High-level KPIs, low stock table, recent feed
         ├── SlotsView.tsx                   # Interactive rack schematic & inventory table
         ├── TransactionsView.tsx            # GCash approval cards, history, & CSV export
-        ├── HealthView.tsx                  # 6 live hardware diagnostic cards & health logs
+        ├── HealthView.tsx                  # Hardware diagnostics & CPU-temperature history
+        ├── Esp32LogsView.tsx               # Server-timestamped ESP32 event stream
         ├── NotificationsView.tsx           # Full notification history & mark-all-read
+        ├── SmsLogsView.tsx                 # GSM/SMS message history
         └── SettingsView.tsx                # Slot editor, admin profile & machine controls
 ```
 
@@ -208,11 +224,12 @@ react-app/
 | View | Purpose & Functionality |
 | :--- | :--- |
 | **📊 Overview** | Live snapshot of machine metrics: Units Left, Today's Sales with % delta vs yesterday, Dispense Count (GCash vs Coin), and Coin Box fill %. Includes an "Attention Needed" table for low/empty slots and recent activity stream. |
-| **📦 Slots & Inventory** | Visual machine rack schematic mirroring the physical ESP32 wiring order. Displays progress fill bars and stock status tags (`In stock`, `Low stock`, `Empty`) per slot. |
-| **💳 Transactions** | Two-tier payment management: (1) **GCash Approvals Queue** with interactive **Approve** and **Reject** buttons, and (2) **Dispense History** with instant **Export CSV** download. |
-| **🩺 Device Health** | Hardware telemetry grid displaying: ESP32 Uptime, Coin Pulses (Session), SIM800L Signal Strength, 5V Buck 1 Voltage, 4.2V Buck 2 Voltage, and Tamper Sensor state, plus historical diagnostic logs. |
+| **📦 Slots & Inventory** | Visual machine rack schematic mirroring the physical ESP32 wiring order. Displays fill bars and stock tags (`In stock`, `Low stock`, `Empty`), plus an **Add stock** modal that safely caps stock at capacity. |
+| **💳 Transactions** | Two-tier payment management: (1) **GCash Approvals Queue** with interactive **Approve** and **Reject** buttons, and (2) **Dispense History** with instant **Export CSV** download. GCash references are masked in the UI. |
+| **🩺 Device Health** | Hardware telemetry grid and historical logs. The ESP32 CPU chart uses minute samples, avoids false zero dips for brief gaps, displays `0°C` after a 3+ minute telemetry outage, and shows the highest real recorded temperature. |
+| **📋 ESP32 Logs** | Live/polled event timeline from `esp32_logs`, including Wi-Fi and Supabase connection events, HTTP result codes, coins, payment selection, relay state, IR detection, dispense result, and LCD text. |
 | **🔔 Notifications** | Real-time alert feed for low stock alerts, coin box threshold warnings, vibration tamper events, and GCash submissions. Includes auto-updating sidebar unread badge and "Mark all as read". |
-| **⚙️ Settings** | Comprehensive configuration panel: (1) **Products per Slot** name/capacity editor, (2) **Admin Profile** credentials updater with password change, and (3) **Machine Settings** (Unit Price, Low Stock Threshold, GSM Number, Tamper Toggle, Auto-Reset, Device Key). |
+| **⚙️ Settings** | Comprehensive configuration panel: (1) **Products per Slot** name/capacity editor, (2) **Admin Profile** credentials updater with password change, and (3) **Machine Settings** (Unit Price, Low Stock Threshold, GSM Number, Tamper Toggle, Auto-Reset, Device Key). It loads on entry and after an explicit save/reload only, so edits are not interrupted by real-time updates. |
 
 ---
 
@@ -237,10 +254,26 @@ VITE_SUPABASE_URL=https://fjexweubnccjrinhxrct.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_DRZfiimKuXLYdLvE-7iVxQ_yZLMr2OS
 ```
 
-### 3. Initialize Database & Mock Data
+### 3. Initialize or Upgrade the Database
 1. Open the [Supabase SQL Editor](https://supabase.com/dashboard/project/fjexweubnccjrinhxrct/sql/new).
-2. Open [`supabase/migrations/002_mock_data.sql`](file:///c:/Users/kenne/Desktop/em-res/4peace-app/react-app/supabase/migrations/002_mock_data.sql), copy its contents, paste into the query window, and click **Run**.
-3. All tables, permissions, foreign keys, and realistic sample data will be configured instantly.
+2. For a new database, run [`001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql) first. Run [`002_mock_data.sql`](supabase/migrations/002_mock_data.sql) only when you need demo data; do not use its reset/seed statements on a production database.
+3. Then run every timestamped migration in this order:
+
+   ```text
+   20260910053637_firmware_connection.sql
+   20260911090000_enable_dashboard_realtime.sql
+   20260911100000_sms_outbox.sql
+   20260911110000_device_resource_telemetry.sql
+   20260911120000_authenticated_device_telemetry.sql
+   20260911130000_esp32_pin_connection_detection.sql
+   20260911140000_esp32_pin_devices.sql
+   20260912100000_esp32_realtime_heartbeat.sql
+   20260912110000_repair_device_health_telemetry.sql
+   20260915100000_esp32_event_logs.sql
+   20260915110000_slot_restock.sql
+   ```
+
+4. The last four migrations are required for accurate online/offline state, repairable health telemetry, ESP32 Logs, and the Add stock modal. Re-flash the ESP32 firmware after applying them.
 
 ### 4. Run Development Server
 ```powershell
@@ -320,21 +353,35 @@ Content-Type: application/json
 ```
 
 #### 5. Sync Hardware Telemetry & Health
-- **Method:** `PATCH`
-- **URL:** `https://<project-id>.supabase.co/rest/v1/device_health?id=eq.1`
+- **Method:** `POST`
+- **URL:** `https://<project-id>.supabase.co/rest/v1/rpc/sync_device_telemetry`
 - **Payload:**
 ```json
 {
-  "esp32_uptime_seconds": 612800,
-  "coin_pulses_session": 50,
-  "sim800l_signal_pct": 85,
-  "buck1_voltage": 5.03,
-  "buck2_voltage": 4.19,
-  "tamper_status": "idle",
-  "coin_box_pulses_total": 745,
-  "last_sync": "NOW()"
+  "p_device_key": "YOUR_DEVICE_KEY",
+  "p_machine_id": "VM001",
+  "p_device_health_id": 1,
+  "p_health": {
+    "esp32_uptime_seconds": 612800,
+    "coin_pulses_session": 50,
+    "sim800l_signal_pct": 85,
+    "buck1_voltage": 5.03,
+    "buck2_voltage": 4.19,
+    "tamper_status": "idle"
+  },
+  "p_resource": {
+    "cpu_temperature_c": 54.2
+  }
 }
 ```
+
+#### 6. ESP32 Heartbeat & Event Logs
+- **Heartbeat:** `POST /rest/v1/rpc/heartbeat_esp32` every 10 seconds. The dashboard treats the device as connected for 25 seconds after the latest successful heartbeat.
+- **Event log:** `POST /rest/v1/rpc/write_esp32_log`. The firmware records Wi-Fi/Supabase connections, HTTP responses, payment and coin events, relay/IR events, dispense results, and displayed LCD text. The server supplies `created_at`, so timestamps do not depend on the ESP32 clock.
+
+### Serial Monitor
+
+Flash `firmware/4peace_esp32_firmware` and open Serial Monitor at **115200 baud**. Connection, Supabase request/response, telemetry, relay, IR, coin, workflow, and LCD events print there and also send to `esp32_logs` when Wi-Fi and Supabase are available. A relay `COMMAND OK` entry confirms ESP32 GPIO command/readback; physical motor and wiring validation still requires the actual vending hardware.
 
 ---
 
@@ -352,7 +399,13 @@ Content-Type: application/json
 ## ❓ Troubleshooting & FAQ
 
 #### Q: I get `401 Unauthorized` or empty tables when fetching data.
-**A:** Run the permission grant query in [`supabase/migrations/002_mock_data.sql`](file:///c:/Users/kenne/Desktop/em-res/4peace-app/react-app/supabase/migrations/002_mock_data.sql). Ensure `DISABLE ROW LEVEL SECURITY` has been executed for development access.
+**A:** Apply the base schema and all timestamped migrations in the order listed above. Confirm the `.env` URL/key and the ESP32 `DEVICE_API_KEY` match `machine_settings.device_api_key`.
+
+#### Q: The dashboard says “Waiting for ESP32” although the hardware is powered.
+**A:** Check Serial Monitor at 115200 baud for Wi-Fi and `heartbeat_esp32` success. Apply `20260912100000_esp32_realtime_heartbeat.sql`, then re-flash the firmware. The status becomes connected only after a successful, recent authenticated heartbeat (within 25 seconds).
+
+#### Q: Device Health still waits for a telemetry sample.
+**A:** Apply `20260912110000_repair_device_health_telemetry.sql` and check Serial Monitor for `sync_device_telemetry` responses. The RPC recreates the main health record if it was previously deleted or cleared.
 
 #### Q: How do I export transaction records?
 **A:** Navigate to the **Transactions** view and click the **Export CSV** button in the top right. A `.csv` file will be generated containing reference IDs, payment methods, slot IDs, amounts, and timestamps.
