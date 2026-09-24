@@ -20,7 +20,7 @@
 #define P17  17
 #define P18  18
 #define P19  19
-#define P23  21
+#define P21  21
 #define P22  22
 #define P23  23
 #define P25  25
@@ -46,11 +46,15 @@
 #define MACHINE_ID            "VM001"
 #define DEVICE_HEALTH_ID      1
 
+// ESP32 event logs (Serial [ESP32 LOG] messages and Supabase uploads).
+// Change to true to enable them.
+#define ESP32_LOG             false
+
 // ------------------------------------------------------------
 // 3. I2C
 // ------------------------------------------------------------
 #define I2C_SCL_PIN           P22  // Board P22 = GPIO22
-#define I2C_SDA_PIN           P23  // Board P23 = GPIO23
+#define I2C_SDA_PIN           P21  // Board P21 = GPIO21
 #define LCD_I2C_ADDR          0x27
 #define PCF8574_I2C_ADDR      0x20
 

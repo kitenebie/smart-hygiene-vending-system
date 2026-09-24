@@ -10,14 +10,21 @@ String fit16(String s) {
   return s;
 }
 
-void updateLcd(const String &line1, const String &line2) {
-  static String last1 = "";
-  static String last2 = "";
+String currentLcdLine1 = "";
+String currentLcdLine2 = "";
 
+void writeLcdLines(const String &line1, const String &line2) {
+  lcd.setCursor(0, 0);
+  lcd.print(fit16(line1));
+  lcd.setCursor(0, 1);
+  lcd.print(fit16(line2));
+}
+
+void updateLcd(const String &line1, const String &line2) {
   String a = fit16(line1);
   String b = fit16(line2);
 
-  if (a == last1 && b == last2) return;
+  if (a == currentLcdLine1 && b == currentLcdLine2) return;
 
   Serial.printf("[LCD] %s | %s\n", a.c_str(), b.c_str());
   // Never save a payment-reference screen in the cloud event log.
@@ -28,13 +35,22 @@ void updateLcd(const String &line1, const String &line2) {
     logEsp32Event("lcd", line1 + " | " + line2);
   }
 
-  lcd.setCursor(0, 0);
-  lcd.print(a);
-  lcd.setCursor(0, 1);
-  lcd.print(b);
+  writeLcdLines(a, b);
 
-  last1 = a;
-  last2 = b;
+  currentLcdLine1 = a;
+  currentLcdLine2 = b;
+}
+
+void showKeypressFeedback(char key, bool hideKey) {
+  const String previousLine1 = currentLcdLine1;
+  const String previousLine2 = currentLcdLine2;
+  const char displayedKey = hideKey ? '*' : key;
+
+  writeLcdLines("You pressed " + String(displayedKey), "Keypad detected");
+  delay(250);
+
+  // Restore the active screen before handleKeypress() applies the key action.
+  writeLcdLines(previousLine1, previousLine2);
 }
 
 void showIdleScreen() {

@@ -87,9 +87,12 @@ String maskGcashReference(const String &reference) {
 }
 
 void handleKeypress(char key) {
+  const bool hideGcashDigit =
+    currentState == STATE_GCASH_INPUT && key >= '0' && key <= '9';
+
   // Do not print individual GCash-reference digits to keep payment details
   // out of the serial log. The length still confirms keypad input is working.
-  if (currentState == STATE_GCASH_INPUT && key >= '0' && key <= '9') {
+  if (hideGcashDigit) {
     unsigned int nextLength = (unsigned int)gcashRefBuffer.length();
     if (nextLength < 16) nextLength++;
     Serial.printf("[KEYPAD] GCash reference digit received (length will be %u)\n", nextLength);
@@ -98,6 +101,7 @@ void handleKeypress(char key) {
   }
 
   beepBuzzer(1, 35);
+  showKeypressFeedback(key, hideGcashDigit);
 
   // ----------------------------------------------------------
   // IDLE

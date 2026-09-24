@@ -186,6 +186,7 @@ volatile uint32_t lastTamperEdgeMs = 0;
 
 // UI
 void updateLcd(const String &line1, const String &line2);
+void showKeypressFeedback(char key, bool hideKey = false);
 void showIdleScreen();
 void beepBuzzer(int count, int durationMs = 80);
 

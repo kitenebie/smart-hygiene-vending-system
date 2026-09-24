@@ -7,6 +7,8 @@
 // Keep request logs useful without exposing API keys, payment references,
 // phone numbers, or request bodies in the Serial Monitor.
 void logEsp32Event(const String &category, const String &message, const String &level) {
+  if (!ESP32_LOG) return;
+
   Serial.printf("[ESP32 LOG] %s | %s | %s\n", level.c_str(), category.c_str(), message.c_str());
 
   // Avoid recursive logging: sending a log is itself an HTTP request.
