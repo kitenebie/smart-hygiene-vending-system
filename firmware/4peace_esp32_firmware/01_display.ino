@@ -51,7 +51,7 @@ void showIdleScreen() {
     toggle = !toggle;
 
     if (toggle) {
-      updateLcd("4Peace Vending", "Insert Coin");
+      updateLcd("4Peace Vending", "Select 1-5");
     } else {
       updateLcd("1-5 Select Item", "B=GCash C=Coin");
     }

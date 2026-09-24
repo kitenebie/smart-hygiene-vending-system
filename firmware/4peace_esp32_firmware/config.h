@@ -20,7 +20,7 @@
 #define P17  17
 #define P18  18
 #define P19  19
-#define P23  21
+#define P21  21
 #define P22  22
 #define P23  23
 #define P25  25
@@ -49,8 +49,8 @@
 // ------------------------------------------------------------
 // 3. I2C
 // ------------------------------------------------------------
-#define I2C_SCL_PIN           P22  // Board P22 = GPIO22
-#define I2C_SDA_PIN           P23  // Board P23 = GPIO23
+#define I2C_SDA_PIN           P21  // Board P21 = GPIO21 (default ESP32 I2C SDA)
+#define I2C_SCL_PIN           P22  // Board P22 = GPIO22 (default ESP32 I2C SCL)
 #define LCD_I2C_ADDR          0x27
 #define PCF8574_I2C_ADDR      0x20
 
@@ -112,7 +112,7 @@
 #define GSM_RX_PIN            P16  // Board P16 = GPIO16; ESP32 RX <- SIM800L TX
 #define GSM_TX_PIN            P17  // Board P17 = GPIO17; ESP32 TX -> SIM800L RX
 #define GSM_BAUDRATE          9600
-#define DEFAULT_ADMIN_SMS     "+639XXXXXXXXX"
+#define DEFAULT_ADMIN_SMS     "+639648378870"
 
 // ------------------------------------------------------------
 // 9. Timing
