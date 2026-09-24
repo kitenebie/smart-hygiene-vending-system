@@ -5,16 +5,21 @@
 // ============================================================================
 
 char scanKeypadRaw() {
+  // keyMap[row][col] — rows are the physical horizontal lines (active-low
+  // drive) and columns are the physical vertical lines (read back).
+  // NOTE: The PCF8574 wiring on this board is COLUMNS on P0-P3 (output)
+  // and ROWS on P4-P7 (read back), so we drive columns and read rows.
+  // The keyMap is transposed to match: keyMap[row_read][col_driven].
   const char keyMap[4][4] = {
-    {'1', '2', '3', 'A'},
-    {'4', '5', '6', 'B'},
-    {'7', '8', '9', 'C'},
-    {'*', '0', '#', 'D'}
+    {'1', '4', '7', '*'},
+    {'2', '5', '8', '0'},
+    {'3', '6', '9', '#'},
+    {'A', 'B', 'C', 'D'}
   };
 
-  for (byte r = 0; r < 4; r++) {
+  for (byte c = 0; c < 4; c++) {
     byte writeByte = 0xFF;
-    bitClear(writeByte, r); // selected row LOW, everything else HIGH
+    bitClear(writeByte, c); // selected column LOW, everything else HIGH
 
     Wire.beginTransmission(PCF8574_I2C_ADDR);
     Wire.write(writeByte);
@@ -27,8 +32,8 @@ char scanKeypadRaw() {
 
     byte readByte = Wire.read();
 
-    for (byte c = 0; c < 4; c++) {
-      if ((readByte & (1 << (c + 4))) == 0) {
+    for (byte r = 0; r < 4; r++) {
+      if ((readByte & (1 << (r + 4))) == 0) {
         return keyMap[r][c];
       }
     }
@@ -162,6 +167,36 @@ void handleKeypress(char key) {
 
       return;
     }
+
+    // B = GCash payment mode (select slot after)
+    if (key == 'B') {
+      if (currentCredit > 0.0f) {
+        updateLcd("Coin Credit Active", "Use Coin Payment");
+        return;
+      }
+      if (WiFi.status() != WL_CONNECTED) {
+        updateLcd("GCash Offline", "Use Coins");
+        beepBuzzer(2, 120);
+        return;
+      }
+      currentState = STATE_GCASH_INPUT;
+      selectedSlotIndex = -1;
+      gcashRefBuffer = "";
+      stateTimer = millis();
+      updateLcd("Select Slot 1-5", "Then Enter Ref");
+      Serial.println("[KEYPAD] GCash mode selected from IDLE; awaiting slot.");
+      return;
+    }
+
+    // C = Coin payment mode (select slot after)
+    if (key == 'C') {
+      currentState = STATE_COIN_PAYMENT;
+      selectedSlotIndex = -1;
+      stateTimer = millis();
+      updateLcd("Coin Mode", "Select Slot 1-5");
+      Serial.println("[KEYPAD] Coin mode selected from IDLE; awaiting slot.");
+      return;
+    }
   }
 
   // ----------------------------------------------------------
@@ -266,7 +301,50 @@ void handleKeypress(char key) {
   // GCASH REFERENCE INPUT
   // ----------------------------------------------------------
   if (currentState == STATE_GCASH_INPUT) {
+    // If slot not yet selected (came from IDLE via 'B'), allow 1-5 to pick slot
+    if (selectedSlotIndex < 0 && key >= '1' && key <= '5') {
+      selectedSlotIndex = key - '1';
+      SlotItem &s = slots[selectedSlotIndex];
+      Serial.printf("[GCASH] Selected %s (%s), stock=%d\n",
+                    s.slotCode.c_str(), s.productName.c_str(), s.stock);
+      logEsp32Event("product_selected", s.slotCode + " - " + s.productName +
+                    "; GCash; stock " + String(s.stock));
+
+      if (s.stock <= 0) {
+        updateLcd(s.slotCode + " Out of Stock", "Choose Another");
+        beepBuzzer(3, 80);
+        selectedSlotIndex = -1;
+        return;
+      }
+
+      if (!pendingQueueHasSpace()) {
+        updateLcd("Service Busy", "Sync Required");
+        beepBuzzer(3, 100);
+        selectedSlotIndex = -1;
+        return;
+      }
+
+      if (!smsOutboxHasSpace(requiredSmsOutboxSlotsForVend(selectedSlotIndex))) {
+        updateLcd("SMS Queue Full", "Sync Required");
+        beepBuzzer(3, 100);
+        selectedSlotIndex = -1;
+        return;
+      }
+
+      gcashRefBuffer = "";
+      stateTimer = millis();
+      updateLcd("Enter GCash Ref", "#Done *=Delete");
+      Serial.printf("[GCASH] Reference entry started for %s, amount=P%.2f\n",
+                    s.slotCode.c_str(), unitPrice);
+      return;
+    }
+
     if (key >= '0' && key <= '9') {
+      if (selectedSlotIndex < 0) {
+        updateLcd("Select Slot 1-5", "First");
+        beepBuzzer(2, 80);
+        return;
+      }
       if (gcashRefBuffer.length() < 16) {
         gcashRefBuffer += key;
       }
@@ -285,6 +363,11 @@ void handleKeypress(char key) {
     }
 
     if (key == '#') {
+      if (selectedSlotIndex < 0) {
+        updateLcd("Select Slot 1-5", "First");
+        beepBuzzer(2, 80);
+        return;
+      }
       if (gcashRefBuffer.length() < 4) {
         updateLcd("Invalid Ref", "Min 4 Digits");
         beepBuzzer(2, 100);
