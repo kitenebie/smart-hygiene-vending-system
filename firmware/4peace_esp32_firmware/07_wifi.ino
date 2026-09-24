@@ -5,7 +5,41 @@
 // ============================================================================
 
 void handleWiFiReconnect() {
-  if (WiFi.status() == WL_CONNECTED) return;
+  static bool initialized = false;
+  static bool wasConnected = false;
+  static bool recoverySyncPending = false;
+
+  const bool connected = WiFi.status() == WL_CONNECTED;
+  if (!initialized) {
+    initialized = true;
+    wasConnected = connected;
+  }
+
+  if (connected) {
+    if (!wasConnected) {
+      Serial.print("[WiFi] Reconnected: ");
+      Serial.println(WiFi.localIP());
+      logEsp32Event("wifi", "Reconnected to Wi-Fi; IP " + WiFi.localIP().toString());
+      recoverySyncPending = true;
+    }
+    wasConnected = true;
+
+    // Queue replay can involve many HTTPS calls. Run it only when no customer
+    // interaction is active, never inside the reconnect attempt itself.
+    if (recoverySyncPending && currentState == STATE_IDLE && !motorActive) {
+      syncPendingTransactions();
+      syncPendingSmsOutbox();
+
+      if (!hasPendingTransactions()) {
+        httpFetchConfig();
+        httpFetchSlots();
+      }
+      recoverySyncPending = false;
+    }
+    return;
+  }
+
+  wasConnected = false;
 
   if (millis() - lastWiFiRetryTime < WIFI_RETRY_INTERVAL_MS) {
     return;
@@ -16,37 +50,8 @@ void handleWiFiReconnect() {
   Serial.println("[WiFi] Reconnect attempt...");
   WiFi.disconnect();
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  unsigned long started = millis();
-  while (WiFi.status() != WL_CONNECTED &&
-         millis() - started < 2500UL) {
-    delay(100);
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("[WiFi] Reconnected: ");
-    Serial.println(WiFi.localIP());
-    logEsp32Event("wifi", "Reconnected to Wi-Fi; IP " + WiFi.localIP().toString());
-
-    syncPendingTransactions();
-    syncPendingSmsOutbox();
-
-    // Only fetch cloud stock after replaying offline transactions.
-    bool anyPending = false;
-    for (int i = 0; i < PENDING_QUEUE_MAX; i++) {
-      char keyName[8];
-      snprintf(keyName, sizeof(keyName), "tx%02d", i);
-      if (prefs.getString(keyName, "").length() > 0) {
-        anyPending = true;
-        break;
-      }
-    }
-
-    if (!anyPending) {
-      httpFetchConfig();
-      httpFetchSlots();
-    }
-  }
+  // Connection completion is observed on later loop iterations. Do not block
+  // keypad scanning or payment state handling while the radio reconnects.
 }
 
 // ============================================================================

@@ -4,13 +4,17 @@
 // SIM800L
 // ============================================================================
 
-String gsmReadUntil(unsigned long timeoutMs) {
+String gsmReadUntil(unsigned long timeoutMs, const String &stopToken) {
   String response = "";
   unsigned long started = millis();
 
   while (millis() - started < timeoutMs) {
     while (SerialGSM.available()) {
       response += char(SerialGSM.read());
+    }
+
+    if (stopToken.length() && response.indexOf(stopToken) >= 0) {
+      return response;
     }
 
     delay(5);
@@ -30,7 +34,7 @@ bool gsmCommand(
 
   SerialGSM.println(command);
 
-  String response = gsmReadUntil(timeoutMs);
+  String response = gsmReadUntil(timeoutMs, expected);
 
   Serial.print("[GSM] ");
   Serial.print(command);
@@ -83,7 +87,7 @@ bool gsmSendSMS(
   SerialGSM.print(recipient);
   SerialGSM.println("\"");
 
-  String prompt = gsmReadUntil(1500);
+  String prompt = gsmReadUntil(1500, ">");
 
   if (prompt.indexOf('>') < 0) {
     Serial.println("[GSM] No SMS prompt.");
@@ -93,7 +97,7 @@ bool gsmSendSMS(
   SerialGSM.print(message);
   SerialGSM.write(26);
 
-  String result = gsmReadUntil(7000);
+  String result = gsmReadUntil(7000, "\r\nOK\r\n");
 
   Serial.print("[GSM] SMS result: ");
   Serial.println(result);
@@ -106,7 +110,7 @@ int gsmGetSignalStrength() {
   while (SerialGSM.available()) SerialGSM.read();
 
   SerialGSM.println("AT+CSQ");
-  String response = gsmReadUntil(1000);
+  String response = gsmReadUntil(1000, "\r\nOK\r\n");
 
   int idx = response.indexOf("+CSQ:");
   if (idx < 0) return -1;

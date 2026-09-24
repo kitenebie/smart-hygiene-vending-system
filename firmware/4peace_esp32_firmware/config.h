@@ -49,6 +49,8 @@
 // ESP32 event logs (Serial [ESP32 LOG] messages and Supabase uploads).
 // Change to true to enable them.
 #define ESP32_LOG             false
+#define ESP32_LOG_QUEUE_MAX       12
+#define ESP32_LOG_UPLOAD_INTERVAL_MS 1000UL
 
 // ------------------------------------------------------------
 // 3. I2C
@@ -134,8 +136,10 @@
 #define PIN_DIAGNOSTIC_INTERVAL_MS       2000UL
 #define PIN_DIAGNOSTIC_SETTLE_MS            5UL
 #define WIFI_RETRY_INTERVAL_MS     10000UL
+#define NETWORK_HTTP_TIMEOUT_MS     5000UL
 #define SMS_PROCESS_INTERVAL_MS     15000UL
-#define SMS_PROCESS_BATCH_SIZE      4
+#define SMS_PROCESS_BATCH_SIZE      1
+#define SMS_MAX_ATTEMPTS             5
 
 #define COIN_PULSE_TIMEOUT_MS      400UL
 
@@ -145,6 +149,7 @@
 #define TAMPER_REQUIRED_EDGES      3
 
 #define KEYPAD_DEBOUNCE_MS         35UL
+#define KEYPAD_FEEDBACK_MS         350UL
 #define SENSOR_STABLE_MS           50UL
 
 // ------------------------------------------------------------

@@ -4,6 +4,73 @@
 // Dispensing
 // ============================================================================
 
+bool dispenseFailureMachineAlertPending = false;
+bool dispenseFailureNotificationPending = false;
+String deferredDispenseFailureMessage = "";
+unsigned long lastDispenseFailureAlertAttempt = 0;
+
+void deferDispenseFailureCloudAlert(const String &message) {
+  deferredDispenseFailureMessage = message;
+  dispenseFailureMachineAlertPending = true;
+  dispenseFailureNotificationPending = true;
+  lastDispenseFailureAlertAttempt = 0;
+}
+
+void processDeferredDispenseFailureAlert() {
+  if (!dispenseFailureMachineAlertPending &&
+      !dispenseFailureNotificationPending) {
+    return;
+  }
+
+  // Never make a customer wait on HTTP after a failed vend. Coin failures
+  // stay in COIN_PAYMENT, so the retained credit and keypad get priority.
+  if (currentState != STATE_IDLE || motorActive ||
+      WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  // Give the customer a short window to start another action before making
+  // either network request, and throttle retries if the server is unavailable.
+  if (millis() - stateTimer < 3000UL) return;
+  if (lastDispenseFailureAlertAttempt != 0 &&
+      millis() - lastDispenseFailureAlertAttempt < 30000UL) {
+    return;
+  }
+  lastDispenseFailureAlertAttempt = millis();
+
+  if (dispenseFailureMachineAlertPending &&
+      httpLogMachineAlert("critical", deferredDispenseFailureMessage)) {
+    dispenseFailureMachineAlertPending = false;
+  }
+
+  if (dispenseFailureNotificationPending &&
+      httpPostNotification("system", "critical", deferredDispenseFailureMessage)) {
+    dispenseFailureNotificationPending = false;
+  }
+
+  if (!dispenseFailureMachineAlertPending &&
+      !dispenseFailureNotificationPending) {
+    deferredDispenseFailureMessage = "";
+  }
+}
+
+void restoreStateAfterDispenseFailure(const String &method) {
+  selectedSlotIndex = -1;
+  gcashRefBuffer = "";
+
+  if (method == "coin" && currentCredit > 0.0f) {
+    currentState = STATE_COIN_PAYMENT;
+    // Keep the failure/retained-credit message visible briefly, but do not
+    // block keypad scanning during that time.
+    paymentRetryPromptUntil = millis() + 1800UL;
+  } else {
+    currentState = STATE_IDLE;
+    paymentRetryPromptUntil = 0;
+  }
+
+  stateTimer = millis();
+}
+
 bool sensorIsTriggeredStable(int pin, unsigned long stableMs) {
   if (digitalRead(pin) != IR_TRIGGERED_LEVEL) return false;
 
@@ -110,20 +177,35 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
 
   // Reject vend if IR is already blocked BEFORE motor activation.
   if (sensorIsTriggeredStable(s.irPin, SENSOR_STABLE_MS)) {
-    updateLcd("IR Sensor Blocked", s.slotCode);
     Serial.printf("[IR] Slot %s sensor already blocked before vend.\n",
                   s.slotCode.c_str());
     logEsp32Event("ir_sensor", s.slotCode + " sensor blocked before dispense", "warning");
-
-    if (WiFi.status() == WL_CONNECTED) {
-      httpLogMachineAlert(
-        "critical",
-        "IR sensor blocked before vend on " + s.slotCode
-      );
-    }
-
-    currentState = STATE_ERROR;
+    deferDispenseFailureCloudAlert(
+      "IR sensor blocked before vend on " + s.slotCode
+    );
+    restoreStateAfterDispenseFailure(method);
+    updateLcd("IR Sensor Blocked",
+              method == "coin" ? "Credit Retained" : s.slotCode);
     beepBuzzer(4, 100);
+    return false;
+  }
+
+  // Create a durable PREPARED record before the motor can move. A reboot after
+  // this point leaves an unresolved record that locks further vending for
+  // manual reconciliation instead of silently losing or duplicating a sale.
+  PendingTx tx;
+  tx.txId = makeTransactionId();
+  tx.refCode = refCode;
+  tx.method = method;
+  tx.slotId = s.id;
+  tx.amount = unitPrice;
+  tx.completed = false;
+
+  if (!enqueuePendingTransaction(tx)) {
+    Serial.println("[FATAL] Could not prepare the durable vend journal.");
+    updateLcd("Journal Error", "Service Locked");
+    currentState = STATE_ERROR;
+    beepBuzzer(5, 120);
     delay(1200);
     currentState = STATE_IDLE;
     return false;
@@ -206,29 +288,35 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
     Serial.printf("[VEND] FAILED: %s had no confirmed product drop; payment retained.\n",
                   s.slotCode.c_str());
     logEsp32Event("dispense", s.slotCode + " failed: no IR product-drop confirmation", "error");
-    updateLcd("Dispense Failed", "No IR Drop");
-    beepBuzzer(4, 120);
-
-    if (WiFi.status() == WL_CONNECTED) {
-      httpLogMachineAlert(
-        "critical",
-        "Dispense failed on " + s.slotCode + ": IR did not confirm product drop"
-      );
-
-      httpPostNotification(
-        "system",
-        "critical",
-        "Dispense failure on " + s.slotCode
-      );
-    }
+    deferDispenseFailureCloudAlert(
+      "Dispense failed on " + s.slotCode +
+      ": IR did not confirm product drop"
+    );
 
     // Important: coin credit is NOT deducted on failure.
     // GCash is NOT consumed because complete_vend() is not called.
-    selectedSlotIndex = -1;
-    currentState = STATE_ERROR;
-    delay(1800);
-    currentState = STATE_IDLE;
-    stateTimer = millis();
+    // Remove the prepared journal only after the motor is safely off and no
+    // product drop was detected. Failure to remove it intentionally locks the
+    // service, because the physical outcome can no longer be trusted.
+    const bool journalCleared = removePendingTransaction(tx.txId);
+    if (!journalCleared) {
+      Serial.println("[FATAL] Could not clear unresolved prepared vend.");
+      updateLcd("Journal Unclear", "Call Admin");
+      selectedSlotIndex = -1;
+      gcashRefBuffer = "";
+      currentState = STATE_ERROR;
+      beepBuzzer(5, 120);
+      return false;
+    }
+
+    restoreStateAfterDispenseFailure(method);
+    if (method == "coin" && currentCredit > 0.0f) {
+      updateLcd("Dispense Failed",
+                "Credit P" + String(currentCredit, 0) + " Retry");
+    } else {
+      updateLcd("Dispense Failed", "Payment Retained");
+    }
+    beepBuzzer(4, 120);
     return false;
   }
 
@@ -242,30 +330,46 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
   if (method == "coin") {
     currentCredit -= unitPrice;
     if (currentCredit < 0.0f) currentCredit = 0.0f;
+    if (!persistCurrentCredit()) {
+      Serial.println("[FATAL] Remaining coin credit could not be saved to NVS.");
+      updateLcd("Credit Save Err", "Service Locked");
+      beepBuzzer(5, 120);
+      selectedSlotIndex = -1;
+      gcashRefBuffer = "";
+      currentState = STATE_ERROR;
+      return false;
+    }
   }
 
   // Decrement persistent local inventory immediately.
   s.stock--;
   if (s.stock < 0) s.stock = 0;
-  persistStock(slotIdx);
+  if (!persistStock(slotIdx)) {
+    Serial.println("[FATAL] Local stock could not be saved to NVS.");
+    updateLcd("Stock Save Error", "Service Locked");
+    beepBuzzer(5, 120);
+    selectedSlotIndex = -1;
+    gcashRefBuffer = "";
+    currentState = STATE_ERROR;
+    return false;
+  }
+
+  // Mark COMPLETED only after the monetary balance and inventory are safely
+  // persisted. A reset anywhere earlier leaves PREPARED and locks the service,
+  // preventing both a duplicate vend and accidental cloud reconciliation.
+  if (!markPendingTransactionCompleted(tx.txId)) {
+    Serial.println("[FATAL] Product dropped but journal completion failed.");
+    updateLcd("Journal Unclear", "Call Admin");
+    beepBuzzer(5, 120);
+    selectedSlotIndex = -1;
+    gcashRefBuffer = "";
+    currentState = STATE_ERROR;
+    return false;
+  }
   Serial.printf("[VEND] SUCCESS: %s dispensed; local stock=%d; credit=P%.2f\n",
                 s.slotCode.c_str(), s.stock, currentCredit);
   logEsp32Event("dispense", s.slotCode + " - " + s.productName +
                 " dispensed successfully; stock " + String(s.stock));
-
-  PendingTx tx;
-  tx.txId = makeTransactionId();
-  tx.refCode = refCode;
-  tx.method = method;
-  tx.slotId = s.id;
-  tx.amount = unitPrice;
-
-  // Journal FIRST. This protects the sale across Wi-Fi loss / reboot.
-  if (!enqueuePendingTransaction(tx)) {
-    Serial.println("[FATAL] Could not journal completed physical vend.");
-    updateLcd("Journal Error", "Call Admin");
-    beepBuzzer(5, 120);
-  }
 
   // Best-effort immediate cloud sync.
   if (WiFi.status() == WL_CONNECTED) {

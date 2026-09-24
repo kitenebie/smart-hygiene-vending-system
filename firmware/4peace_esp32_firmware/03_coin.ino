@@ -42,6 +42,10 @@ void handleCoinProcessing() {
   }
 
   currentCredit += coinValue;
+  if (!persistCurrentCredit()) {
+    Serial.println("[FATAL] Coin credit could not be saved to NVS.");
+    logEsp32Event("persistence", "Coin credit could not be saved", "error");
+  }
   sessionCoinPulses += pulses;
   totalCoinBoxPulses += pulses;
   prefs.putULong("coinTotal", totalCoinBoxPulses);

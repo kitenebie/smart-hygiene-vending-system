@@ -1,6 +1,6 @@
 // Arduino IDE tab: all ESP32-WROOM GPIO status monitoring.
-// Only relay/buzzer pins are temporarily switched to INPUT_PULLUP; every other
-// GPIO is read without changing its configured mode, or marked reserved.
+// Diagnostics are deliberately non-invasive: live relay, buzzer, UART, I2C,
+// and sensor pin modes are never changed while the machine is powered.
 
 enum PinCheckKind { PIN_READ_ONLY, PIN_OUTPUT_PROBE, PIN_NO_TOUCH };
 
@@ -80,9 +80,15 @@ const char *priorityPinLabel(int gpio) {
 void restorePinDiagnosticOutputs() {
   for (size_t i = 0; i < PIN_PROBE_COUNT; i++) {
     if (PIN_PROBES[i].kind != PIN_OUTPUT_PROBE) continue;
-    pinMode(PIN_PROBES[i].gpio, OUTPUT);
+    // Preload the safe level before enabling the output driver.
     digitalWrite(PIN_PROBES[i].gpio, PIN_PROBES[i].restoreLevel);
+    pinMode(PIN_PROBES[i].gpio, OUTPUT);
   }
+}
+
+bool i2cDeviceResponds(uint8_t address) {
+  Wire.beginTransmission(address);
+  return Wire.endTransmission() == 0;
 }
 
 bool httpSyncPinStatus(JsonArray pins) {
@@ -124,32 +130,46 @@ void runPinConnectionDiagnostics() {
 
   DynamicJsonDocument samples(8192);
   JsonArray pins = samples.to<JsonArray>();
+  const bool i2cBusHealthy =
+    i2cDeviceResponds(LCD_I2C_ADDR) && i2cDeviceResponds(PCF8574_I2C_ADDR);
 
   for (size_t i = 0; i < PIN_PROBE_COUNT; i++) {
     const PinProbe &probe = PIN_PROBES[i];
+    const char *label = priorityPinLabel(probe.gpio);
+    const bool assigned = label[0] != '\0';
     int value = HIGH;
-    bool measured = false;
+    bool connected = false;
+    String realtimeValue = "N/A";
 
-    if (probe.kind == PIN_OUTPUT_PROBE) {
-      pinMode(probe.gpio, INPUT_PULLUP);
-      delay(PIN_DIAGNOSTIC_SETTLE_MS);
+    if (probe.gpio == I2C_SDA_PIN || probe.gpio == I2C_SCL_PIN) {
+      connected = i2cBusHealthy;
+      realtimeValue = i2cBusHealthy
+        ? "I2C devices acknowledged"
+        : "I2C device ACK missing";
+    } else if (probe.kind == PIN_OUTPUT_PROBE) {
+      // Read back the configured output latch without ever releasing the relay
+      // or buzzer GPIO. This verifies firmware state, not external wiring.
       value = digitalRead(probe.gpio);
-      pinMode(probe.gpio, OUTPUT);
-      digitalWrite(probe.gpio, probe.restoreLevel);
-      measured = true;
+      connected = assigned && value == probe.restoreLevel;
+      realtimeValue = String(value == LOW ? "LOW" : "HIGH") +
+        " (safe output readback)";
     } else if (probe.kind == PIN_READ_ONLY) {
       value = digitalRead(probe.gpio);
-      measured = true;
+      connected = assigned;
+      realtimeValue = String(value == LOW ? "LOW" : "HIGH") +
+        " (non-invasive input sample)";
+    } else if (assigned) {
+      // UART pins are active peripherals and must not be sampled/reconfigured.
+      connected = true;
+      realtimeValue = "Active peripheral; not electrically probed";
     }
 
     JsonObject pin = pins.createNestedObject();
     pin["gpio"] = probe.gpio;
-    pin["pin_label"] = priorityPinLabel(probe.gpio);
+    pin["pin_label"] = label;
     pin["current_mode"] = probe.mode;
-    pin["connection_status"] = measured && value == LOW ? "connected" : "disconnected";
-    pin["realtime_value"] = measured
-      ? (value == LOW ? "LOW (ground detected)" : "HIGH (open)")
-      : "N/A";
+    pin["connection_status"] = connected ? "connected" : "disconnected";
+    pin["realtime_value"] = realtimeValue;
   }
 
   httpSyncPinStatus(pins);

@@ -40,7 +40,10 @@ void handleTamperCheck() {
   portEXIT_CRITICAL(&tamperMux);
   windowStart = 0;
 
-  if (millis() - lastTamperAlertTime < TAMPER_ALERT_COOLDOWN_MS) {
+  // A zero timestamp means no alert has ever been sent. Without this guard,
+  // every real tamper event during the first cooldown period after boot is lost.
+  if (lastTamperAlertTime != 0 &&
+      millis() - lastTamperAlertTime < TAMPER_ALERT_COOLDOWN_MS) {
     return;
   }
 

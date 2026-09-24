@@ -87,6 +87,7 @@ struct PendingTx {
   String method;
   int slotId;
   float amount;
+  bool completed;
 };
 
 struct DeviceResourceSnapshot {
@@ -161,6 +162,7 @@ unsigned long lastPinDiagnosticTime = 0;
 unsigned long lastWiFiRetryTime = 0;
 unsigned long lastTamperAlertTime = 0;
 unsigned long lastSmsProcessTime = 0;
+unsigned long paymentRetryPromptUntil = 0;
 
 int gsmSignalPct = -1;
 volatile bool motorActive = false;
@@ -187,6 +189,7 @@ volatile uint32_t lastTamperEdgeMs = 0;
 // UI
 void updateLcd(const String &line1, const String &line2);
 void showKeypressFeedback(char key, bool hideKey = false);
+void serviceLcdFeedback();
 void showIdleScreen();
 void beepBuzzer(int count, int durationMs = 80);
 
@@ -208,17 +211,24 @@ bool waitForNewIrDrop(int pin, unsigned long timeoutMs);
 String makeTransactionId();
 String makeSmsEventId();
 int requiredSmsOutboxSlotsForVend(int slotIdx);
+void processDeferredDispenseFailureAlert();
 
 // Persistence
 void loadPersistentStocks();
-void persistStock(int slotIdx);
+bool persistStock(int slotIdx);
 bool pendingQueueHasSpace();
 bool hasPendingTransactions();
 bool enqueuePendingTransaction(const PendingTx &tx);
+bool markPendingTransactionCompleted(const String &txId);
+bool removePendingTransaction(const String &txId);
 void syncPendingTransactions();
+bool persistCurrentCredit();
 bool smsOutboxHasSpace(int requiredSlots = 1);
 bool queueSmsEvent(const String &eventType, const String &message);
 void syncPendingSmsOutbox();
+bool isSmsDeliveryAwaitingAck(uint32_t smsId);
+bool rememberSmsDeliveryAwaitingAck(uint32_t smsId);
+void forgetSmsDeliveryAwaitingAck(uint32_t smsId);
 
 // Networking
 void handleWiFiReconnect();
@@ -244,7 +254,7 @@ void configureSecureClient(WiFiClientSecure &client);
 // GSM
 bool gsmInit();
 bool gsmCommand(const String &command, const String &expected, unsigned long timeoutMs);
-String gsmReadUntil(unsigned long timeoutMs);
+String gsmReadUntil(unsigned long timeoutMs, const String &stopToken = "");
 bool gsmSendSMS(const String &recipient, const String &message);
 int gsmGetSignalStrength();
 
@@ -257,6 +267,7 @@ void restorePinDiagnosticOutputs();
 const char *machineStateName(MachineState state);
 void logMachineState();
 void logEsp32Event(const String &category, const String &message, const String &level = "info");
+void processEsp32LogQueue();
 
 // ============================================================================
 // ISR
@@ -288,6 +299,15 @@ void IRAM_ATTR onTamperVibration() {
 // ============================================================================
 
 void setup() {
+  // Active-low relay inputs must never be allowed to float LOW during startup.
+  // Preload the inactive output latch before changing each GPIO to OUTPUT.
+  // External pull-ups are still required to cover the reset/power-up interval
+  // before this first instruction executes.
+  for (int i = 0; i < 5; i++) {
+    digitalWrite(slots[i].relayPin, RELAY_INACTIVE_LEVEL);
+    pinMode(slots[i].relayPin, OUTPUT);
+  }
+
   Serial.begin(115200);
   delay(200);
 
@@ -326,9 +346,8 @@ void setup() {
   pinMode(TAMPER_SENSOR_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(TAMPER_SENSOR_PIN), onTamperVibration, FALLING);
 
-  // Relays and IR
+  // Relays are already initialized safely at the start of setup(). Configure IR.
   for (int i = 0; i < 5; i++) {
-    pinMode(slots[i].relayPin, OUTPUT);
     digitalWrite(slots[i].relayPin, RELAY_INACTIVE_LEVEL);
 
     // Plain INPUT intentionally. GPIO34/35 do not support internal pull-up.
@@ -390,6 +409,7 @@ void setup() {
 // ============================================================================
 
 void loop() {
+  serviceLcdFeedback();
   logMachineState();
   handleWiFiReconnect();
   handleTamperCheck();
@@ -400,8 +420,10 @@ void loop() {
     handleKeypress(key);
   }
 
+  const bool maintenanceAllowed = currentState == STATE_IDLE && !motorActive;
+
   // Periodic health sync
-  if (WiFi.status() == WL_CONNECTED &&
+  if (maintenanceAllowed && WiFi.status() == WL_CONNECTED &&
       millis() - lastHealthSyncTime >= HEALTH_SYNC_INTERVAL_MS) {
     lastHealthSyncTime = millis();
     gsmSignalPct = gsmGetSignalStrength();
@@ -411,7 +433,7 @@ void loop() {
   // This lightweight heartbeat is intentionally separate from health telemetry.
   // It gives the dashboard a prompt online/offline signal without creating a
   // resource-history row every few seconds.
-  if (WiFi.status() == WL_CONNECTED &&
+  if (maintenanceAllowed && WiFi.status() == WL_CONNECTED &&
       millis() - lastDeviceHeartbeatTime >= DEVICE_HEARTBEAT_INTERVAL_MS) {
     lastDeviceHeartbeatTime = millis();
     httpHeartbeatDevice();
@@ -419,7 +441,7 @@ void loop() {
 
   // This setting-only read gives the dashboard switch a fast response.
   // PIN values are neither read nor uploaded unless the switch is enabled.
-  if (WiFi.status() == WL_CONNECTED &&
+  if (maintenanceAllowed && WiFi.status() == WL_CONNECTED &&
       millis() - lastPinMonitorControlTime >= PIN_MONITOR_CONTROL_INTERVAL_MS) {
     lastPinMonitorControlTime = millis();
     httpFetchPinMonitoringState();
@@ -512,7 +534,9 @@ void loop() {
         }
 
         executeDispense(selectedSlotIndex, "coin", "");
-      } else if (selectedSlotIndex < 0) {
+      } else if (selectedSlotIndex < 0 &&
+                 (long)(millis() - paymentRetryPromptUntil) >= 0) {
+        paymentRetryPromptUntil = 0;
         updateLcd("Credit P" + String(currentCredit, 0), "Select Slot 1-5");
       }
       break;
@@ -580,6 +604,14 @@ void loop() {
       currentState = STATE_IDLE;
       stateTimer = millis();
       break;
+  }
+
+  serviceLcdFeedback();
+  // Cloud work may wait on HTTP. Keep it out of every customer-facing state
+  // so retained credit can be used and the keypad remains responsive.
+  if (currentState == STATE_IDLE && !motorActive) {
+    processDeferredDispenseFailureAlert();
+    processEsp32LogQueue();
   }
 
   delay(2);

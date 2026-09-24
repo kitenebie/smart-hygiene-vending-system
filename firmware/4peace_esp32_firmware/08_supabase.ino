@@ -6,20 +6,57 @@
 
 // Keep request logs useful without exposing API keys, payment references,
 // phone numbers, or request bodies in the Serial Monitor.
+struct QueuedEsp32Log {
+  String level;
+  String category;
+  String message;
+};
+
+QueuedEsp32Log esp32LogQueue[ESP32_LOG_QUEUE_MAX];
+size_t esp32LogQueueHead = 0;
+size_t esp32LogQueueCount = 0;
+unsigned long lastEsp32LogUploadTime = 0;
+
 void logEsp32Event(const String &category, const String &message, const String &level) {
   if (!ESP32_LOG) return;
 
   Serial.printf("[ESP32 LOG] %s | %s | %s\n", level.c_str(), category.c_str(), message.c_str());
 
-  // Avoid recursive logging: sending a log is itself an HTTP request.
-  if (WiFi.status() != WL_CONNECTED || esp32LogUploadInProgress) return;
+  // Never perform HTTPS inside a UI, relay, or payment call. Buffer locally and
+  // upload later from the idle maintenance path. If full, discard the oldest
+  // diagnostic entry so the newest fault remains available.
+  if (esp32LogQueueCount == ESP32_LOG_QUEUE_MAX) {
+    esp32LogQueueHead = (esp32LogQueueHead + 1) % ESP32_LOG_QUEUE_MAX;
+    esp32LogQueueCount--;
+  }
+
+  size_t tail = (esp32LogQueueHead + esp32LogQueueCount) % ESP32_LOG_QUEUE_MAX;
+  esp32LogQueue[tail].level = level;
+  esp32LogQueue[tail].category = category;
+  esp32LogQueue[tail].message = message;
+  esp32LogQueueCount++;
+}
+
+void processEsp32LogQueue() {
+  if (!ESP32_LOG || esp32LogQueueCount == 0 || esp32LogUploadInProgress) return;
+  if (WiFi.status() != WL_CONNECTED || currentState != STATE_IDLE || motorActive) return;
+  if (millis() - lastEsp32LogUploadTime < ESP32_LOG_UPLOAD_INTERVAL_MS) return;
+
+  lastEsp32LogUploadTime = millis();
+  QueuedEsp32Log &entry = esp32LogQueue[esp32LogQueueHead];
 
   esp32LogUploadInProgress = true;
-  bool saved = httpInsertEsp32Log(level, category, message);
+  bool saved = httpInsertEsp32Log(entry.level, entry.category, entry.message);
   esp32LogUploadInProgress = false;
 
-  if (!saved) {
-    Serial.printf("[ESP32 LOG] Supabase save failed for %s.\n", category.c_str());
+  if (saved) {
+    entry.level = "";
+    entry.category = "";
+    entry.message = "";
+    esp32LogQueueHead = (esp32LogQueueHead + 1) % ESP32_LOG_QUEUE_MAX;
+    esp32LogQueueCount--;
+  } else {
+    Serial.printf("[ESP32 LOG] Supabase save failed for %s.\n", entry.category.c_str());
   }
 }
 
@@ -92,7 +129,7 @@ void configureSecureClient(WiFiClientSecure &client) {
 
 void addSupabaseHeaders(HTTPClient &http, bool json) {
   http.addHeader("apikey", SUPABASE_KEY);
-  http.setTimeout(10000);
+  http.setTimeout(NETWORK_HTTP_TIMEOUT_MS);
   // Publishable keys use apikey. Bearer is only needed for legacy anon JWTs.
   if (String(SUPABASE_KEY).startsWith("eyJ")) {
     http.addHeader("Authorization", "Bearer " + String(SUPABASE_KEY));
@@ -705,7 +742,8 @@ bool httpMarkSmsSent(uint32_t smsId) {
 
   HTTPClient http;
   String url = String(SUPABASE_URL) + "/rest/v1/sms?id=eq." +
-               String(smsId) + "&status=eq.pending";
+               String(smsId) + "&machine_id=eq." + MACHINE_ID +
+               "&status=eq.pending";
 
   if (!http.begin(client, url)) {
     logSupabaseBeginFailure("PATCH", "sms (mark sent)");
@@ -744,7 +782,8 @@ bool httpRecordSmsFailure(
 
   HTTPClient http;
   String url = String(SUPABASE_URL) + "/rest/v1/sms?id=eq." +
-               String(smsId) + "&status=eq.pending";
+               String(smsId) + "&machine_id=eq." + MACHINE_ID +
+               "&status=eq.pending";
 
   if (!http.begin(client, url)) {
     logSupabaseBeginFailure("PATCH", "sms (record failure)");
@@ -754,7 +793,7 @@ bool httpRecordSmsFailure(
   http.addHeader("Prefer", "return=minimal");
 
   StaticJsonDocument<192> doc;
-  doc["attempt_count"] = nextAttemptCount;
+  doc["attempt_count"] = min(nextAttemptCount, SMS_MAX_ATTEMPTS);
   doc["last_error"] = error;
   String body;
   serializeJson(doc, body);
@@ -778,7 +817,9 @@ void httpProcessPendingSms() {
 
   HTTPClient http;
   String url = String(SUPABASE_URL) +
-               "/rest/v1/sms?status=eq.pending"
+               "/rest/v1/sms?machine_id=eq." + MACHINE_ID +
+               "&status=eq.pending"
+               "&attempt_count=lt." + String(SMS_MAX_ATTEMPTS) +
                "&select=id,recipient,message,attempt_count"
                "&order=id.asc&limit=" + String(SMS_PROCESS_BATCH_SIZE);
 
@@ -818,15 +859,40 @@ void httpProcessPendingSms() {
       continue;
     }
 
+    // This machine only sends alerts to its configured administrator. Never
+    // turn a remotely-created queue row into an arbitrary/premium SMS.
+    if (recipient != adminSmsNumber) {
+      httpRecordSmsFailure(smsId, SMS_MAX_ATTEMPTS, "Recipient not authorized");
+      Serial.printf("[SMS] Blocked unauthorized recipient for id=%lu.\n",
+                    (unsigned long)smsId);
+      continue;
+    }
+
+    // If the modem already confirmed delivery but the previous Supabase ACK
+    // failed, retry only the ACK. Do not send the text message a second time.
+    if (isSmsDeliveryAwaitingAck(smsId)) {
+      if (httpMarkSmsSent(smsId)) {
+        forgetSmsDeliveryAwaitingAck(smsId);
+      }
+      continue;
+    }
+
     // Deliberately continue the loop after a modem failure. This prevents one
     // bad number or a transient GSM error from blocking newer pending alerts.
     if (gsmSendSMS(recipient, message)) {
-      if (!httpMarkSmsSent(smsId)) {
+      bool deliveryRemembered = rememberSmsDeliveryAwaitingAck(smsId);
+      if (httpMarkSmsSent(smsId)) {
+        if (deliveryRemembered) forgetSmsDeliveryAwaitingAck(smsId);
+      } else {
         Serial.printf("[SMS] Sent id=%lu but Supabase ACK failed; status will be retried.\n",
                       (unsigned long)smsId);
+        if (!deliveryRemembered) {
+          Serial.println("[SMS] WARNING: local delivery marker could not be saved.");
+        }
       }
     } else {
-      httpRecordSmsFailure(smsId, attempts + 1, "SIM800L send failed");
+      httpRecordSmsFailure(smsId, min(attempts + 1, SMS_MAX_ATTEMPTS),
+                           "SIM800L send failed");
       Serial.printf("[SMS] Send failed id=%lu; continuing to next pending row.\n",
                     (unsigned long)smsId);
     }

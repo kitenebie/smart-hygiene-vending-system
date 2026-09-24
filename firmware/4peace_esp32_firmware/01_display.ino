@@ -12,6 +12,8 @@ String fit16(String s) {
 
 String currentLcdLine1 = "";
 String currentLcdLine2 = "";
+bool keypadFeedbackActive = false;
+unsigned long keypadFeedbackUntil = 0;
 
 void writeLcdLines(const String &line1, const String &line2) {
   lcd.setCursor(0, 0);
@@ -21,6 +23,14 @@ void writeLcdLines(const String &line1, const String &line2) {
 }
 
 void updateLcd(const String &line1, const String &line2) {
+  // executeDispense() is intentionally blocking while the motor and IR sensor
+  // are active. Expire the keypad overlay here as well as in loop(), so a
+  // motor result can replace "You pressed ..." immediately after the timeout.
+  if (keypadFeedbackActive &&
+      (long)(millis() - keypadFeedbackUntil) >= 0) {
+    keypadFeedbackActive = false;
+  }
+
   String a = fit16(line1);
   String b = fit16(line2);
 
@@ -35,22 +45,30 @@ void updateLcd(const String &line1, const String &line2) {
     logEsp32Event("lcd", line1 + " | " + line2);
   }
 
-  writeLcdLines(a, b);
-
   currentLcdLine1 = a;
   currentLcdLine2 = b;
+
+  // Key feedback is an overlay. Keep the requested screen cached and render
+  // it as soon as the short feedback window expires.
+  if (!keypadFeedbackActive) {
+    writeLcdLines(a, b);
+  }
 }
 
 void showKeypressFeedback(char key, bool hideKey) {
-  const String previousLine1 = currentLcdLine1;
-  const String previousLine2 = currentLcdLine2;
   const char displayedKey = hideKey ? '*' : key;
 
   writeLcdLines("You pressed " + String(displayedKey), "Keypad detected");
-  delay(250);
+  keypadFeedbackActive = true;
+  keypadFeedbackUntil = millis() + KEYPAD_FEEDBACK_MS;
+}
 
-  // Restore the active screen before handleKeypress() applies the key action.
-  writeLcdLines(previousLine1, previousLine2);
+void serviceLcdFeedback() {
+  if (!keypadFeedbackActive) return;
+  if ((long)(millis() - keypadFeedbackUntil) < 0) return;
+
+  keypadFeedbackActive = false;
+  writeLcdLines(currentLcdLine1, currentLcdLine2);
 }
 
 void showIdleScreen() {

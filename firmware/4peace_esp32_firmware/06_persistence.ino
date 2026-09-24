@@ -6,6 +6,11 @@
 
 void loadPersistentStocks() {
   totalCoinBoxPulses = prefs.getULong("coinTotal", 0);
+  currentCredit = prefs.getFloat("credit", 0.0f);
+  if (!isfinite(currentCredit) || currentCredit < 0.0f) {
+    currentCredit = 0.0f;
+    prefs.putFloat("credit", currentCredit);
+  }
 
   for (int i = 0; i < 5; i++) {
     char keyName[8];
@@ -17,25 +22,55 @@ void loadPersistentStocks() {
   }
 }
 
-void persistStock(int slotIdx) {
-  if (slotIdx < 0 || slotIdx >= 5) return;
+bool persistCurrentCredit() {
+  for (int attempt = 0; attempt < 3; attempt++) {
+    if (prefs.putFloat("credit", currentCredit) == sizeof(float)) return true;
+    delay(5);
+  }
+  return false;
+}
+
+bool persistStock(int slotIdx) {
+  if (slotIdx < 0 || slotIdx >= 5) return false;
 
   char keyName[8];
   snprintf(keyName, sizeof(keyName), "stock%d", slotIdx);
-  prefs.putInt(keyName, slots[slotIdx].stock);
+  for (int attempt = 0; attempt < 3; attempt++) {
+    if (prefs.putInt(keyName, slots[slotIdx].stock) == sizeof(int32_t)) return true;
+    delay(5);
+  }
+  return false;
 }
 
 bool pendingQueueHasSpace() {
+  bool emptySlotFound = false;
+
   for (int i = 0; i < PENDING_QUEUE_MAX; i++) {
     char keyName[8];
     snprintf(keyName, sizeof(keyName), "tx%02d", i);
 
-    if (prefs.getString(keyName, "").length() == 0) {
-      return true;
+    String json = prefs.getString(keyName, "");
+    if (json.length() == 0) {
+      emptySlotFound = true;
+      continue;
+    }
+
+    StaticJsonDocument<384> doc;
+    // A corrupt or prepared-but-unresolved sale must lock vending. Continuing
+    // could release stock or accept the same GCash payment twice after reset.
+    if (deserializeJson(doc, json)) {
+      Serial.printf("[QUEUE] Corrupt transaction journal in %s; vending locked.\n",
+                    keyName);
+      return false;
+    }
+    if (!(doc["completed"] | true)) {
+      Serial.printf("[QUEUE] Unresolved prepared transaction %s in %s; vending locked.\n",
+                    doc["tx_id"].as<const char *>(), keyName);
+      return false;
     }
   }
 
-  return false;
+  return emptySlotFound;
 }
 
 bool hasPendingTransactions() {
@@ -62,6 +97,7 @@ bool enqueuePendingTransaction(const PendingTx &tx) {
     doc["method"] = tx.method;
     doc["slot_id"] = tx.slotId;
     doc["amount"] = tx.amount;
+    doc["completed"] = tx.completed;
 
     String json;
     serializeJson(doc, json);
@@ -75,6 +111,67 @@ bool enqueuePendingTransaction(const PendingTx &tx) {
     }
 
     return false;
+  }
+
+  return false;
+}
+
+bool markPendingTransactionCompleted(const String &txId) {
+  for (int i = 0; i < PENDING_QUEUE_MAX; i++) {
+    char keyName[8];
+    snprintf(keyName, sizeof(keyName), "tx%02d", i);
+
+    String json = prefs.getString(keyName, "");
+    if (!json.length()) continue;
+
+    StaticJsonDocument<384> doc;
+    if (deserializeJson(doc, json)) return false;
+    if (doc["tx_id"].as<String>() != txId) continue;
+
+    doc["completed"] = true;
+    String updated;
+    serializeJson(doc, updated);
+    for (int attempt = 0; attempt < 3; attempt++) {
+      if (prefs.putString(keyName, updated) > 0) return true;
+      delay(5);
+    }
+    return false;
+  }
+
+  return false;
+}
+
+bool removePendingTransaction(const String &txId) {
+  for (int i = 0; i < PENDING_QUEUE_MAX; i++) {
+    char keyName[8];
+    snprintf(keyName, sizeof(keyName), "tx%02d", i);
+
+    String json = prefs.getString(keyName, "");
+    if (!json.length()) continue;
+
+    StaticJsonDocument<384> doc;
+    if (deserializeJson(doc, json)) return false;
+    if (doc["tx_id"].as<String>() == txId) {
+      // NVS erase includes a commit, but verify by reading the key back. A
+      // transient failure must not leave a normal no-drop result looking like
+      // an unresolved vend and permanently blocking the next keypad attempt.
+      for (int attempt = 1; attempt <= 3; attempt++) {
+        if (prefs.getString(keyName, "").length() == 0) return true;
+
+        const bool removed = prefs.remove(keyName);
+        if (removed && prefs.getString(keyName, "").length() == 0) {
+          Serial.printf("[QUEUE] Cleared failed vend %s from %s.\n",
+                        txId.c_str(), keyName);
+          return true;
+        }
+
+        Serial.printf("[QUEUE] Retry %d clearing failed vend %s from %s.\n",
+                      attempt, txId.c_str(), keyName);
+        delay(10);
+      }
+
+      return prefs.getString(keyName, "").length() == 0;
+    }
   }
 
   return false;
@@ -147,6 +244,39 @@ bool queueSmsEvent(const String &eventType, const String &message) {
   return false;
 }
 
+bool isSmsDeliveryAwaitingAck(uint32_t smsId) {
+  for (int i = 0; i < SMS_OUTBOX_MAX; i++) {
+    char keyName[8];
+    snprintf(keyName, sizeof(keyName), "ack%02d", i);
+    if (prefs.getULong(keyName, 0) == smsId) return true;
+  }
+  return false;
+}
+
+bool rememberSmsDeliveryAwaitingAck(uint32_t smsId) {
+  if (isSmsDeliveryAwaitingAck(smsId)) return true;
+
+  for (int i = 0; i < SMS_OUTBOX_MAX; i++) {
+    char keyName[8];
+    snprintf(keyName, sizeof(keyName), "ack%02d", i);
+    if (prefs.getULong(keyName, 0) == 0) {
+      return prefs.putULong(keyName, smsId) == sizeof(uint32_t);
+    }
+  }
+  return false;
+}
+
+void forgetSmsDeliveryAwaitingAck(uint32_t smsId) {
+  for (int i = 0; i < SMS_OUTBOX_MAX; i++) {
+    char keyName[8];
+    snprintf(keyName, sizeof(keyName), "ack%02d", i);
+    if (prefs.getULong(keyName, 0) == smsId) {
+      prefs.remove(keyName);
+      return;
+    }
+  }
+}
+
 void syncPendingSmsOutbox() {
   if (WiFi.status() != WL_CONNECTED) return;
 
@@ -206,7 +336,7 @@ void syncPendingTransactions() {
     if (err) {
       Serial.printf("[QUEUE] Corrupt entry %s; leaving for manual inspection.\n",
                     keyName);
-      continue;
+      return;
     }
 
     PendingTx tx;
@@ -215,6 +345,19 @@ void syncPendingTransactions() {
     tx.method = doc["method"] | "";
     tx.slotId = doc["slot_id"] | 0;
     tx.amount = doc["amount"] | 0.0f;
+    tx.completed = doc["completed"] | true; // Legacy entries were completed sales.
+
+    if (!tx.completed) {
+      Serial.printf("[QUEUE] Unresolved prepared vend %s; service remains locked.\n",
+                    tx.txId.c_str());
+      return;
+    }
+
+    if (!tx.txId.length() || (tx.method != "coin" && tx.method != "gcash") ||
+        tx.slotId <= 0 || tx.amount <= 0.0f) {
+      Serial.printf("[QUEUE] Invalid entry %s; service remains locked.\n", keyName);
+      return;
+    }
 
     int serverStock = -1;
 

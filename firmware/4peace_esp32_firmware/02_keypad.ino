@@ -93,7 +93,8 @@ String maskGcashReference(const String &reference) {
 
 void handleKeypress(char key) {
   const bool hideGcashDigit =
-    currentState == STATE_GCASH_INPUT && key >= '0' && key <= '9';
+    currentState == STATE_GCASH_INPUT && selectedSlotIndex >= 0 &&
+    key >= '0' && key <= '9';
 
   // Do not print individual GCash-reference digits to keep payment details
   // out of the serial log. The length still confirms keypad input is working.
