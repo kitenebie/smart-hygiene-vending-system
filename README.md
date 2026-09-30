@@ -407,6 +407,9 @@ Flash `firmware/4peace_esp32_firmware` and open Serial Monitor at **115200 baud*
 #### Q: Device Health still waits for a telemetry sample.
 **A:** Apply `20260912110000_repair_device_health_telemetry.sql` and check Serial Monitor for `sync_device_telemetry` responses. The RPC recreates the main health record if it was previously deleted or cleared.
 
+#### Q: The LCD shows `LittleFS Error` / `Service Locked` on a first boot.
+**A:** The firmware now initializes a blank LittleFS partition automatically, then downloads and saves the machine configuration and slots. Re-flash the current firmware and wait for `Config Saved` then `Slots Saved`. If Serial Monitor still shows `LittleFS ... unavailable` after `Format failed`, select an ESP32 partition scheme with filesystem storage in Arduino IDE and flash again.
+
 #### Q: How do I export transaction records?
 **A:** Navigate to the **Transactions** view and click the **Export CSV** button in the top right. A `.csv` file will be generated containing reference IDs, payment methods, slot IDs, amounts, and timestamps.
 

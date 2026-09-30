@@ -47,10 +47,16 @@
 #define DEVICE_HEALTH_ID      1
 
 // ESP32 event logs (Serial [ESP32 LOG] messages and Supabase uploads).
-// Change to true to enable them.
-#define ESP32_LOG             false
+// The dashboard's ESP32 Logs page depends on this being enabled.
+#define ESP32_LOG             true
 #define ESP32_LOG_QUEUE_MAX       12
 #define ESP32_LOG_UPLOAD_INTERVAL_MS 1000UL
+
+// A blank ESP32 has no LittleFS filesystem yet. Allow the firmware to create
+// it once so it can save the downloaded machine configuration and slot cache.
+// If a mount ever fails later, the durable NVS transaction journal remains
+// intact and pending sales are replayed after the cloud snapshot is restored.
+#define LITTLEFS_FORMAT_ON_MOUNT_FAILURE true
 
 // ------------------------------------------------------------
 // 3. I2C

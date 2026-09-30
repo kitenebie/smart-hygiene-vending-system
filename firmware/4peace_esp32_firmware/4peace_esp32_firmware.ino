@@ -327,8 +327,23 @@ void setup() {
   // NVS / persistent data
   prefs.begin("4peace", false);
 
-  // Read-only telemetry only. Do not format a missing or invalid filesystem.
+  // A first flash normally has an unformatted LittleFS partition. Create it
+  // so the required config and slot snapshots can be downloaded after Wi-Fi
+  // connects. Pending vending transactions live in NVS, so they survive this
+  // recovery path and are replayed once the cloud snapshot is available.
   filesystemMounted = LittleFS.begin(false);
+  if (!filesystemMounted) {
+    Serial.println("[LittleFS] Mount failed; initializing filesystem.");
+#if LITTLEFS_FORMAT_ON_MOUNT_FAILURE
+    const bool formatted = LittleFS.format();
+    Serial.printf("[LittleFS] Format %s.\n", formatted ? "succeeded" : "failed");
+    if (formatted) {
+      filesystemMounted = LittleFS.begin(false);
+    }
+#else
+    Serial.println("[LittleFS] Formatting disabled by configuration.");
+#endif
+  }
   Serial.printf("[LittleFS] %s\n", filesystemMounted ? "mounted" : "unavailable");
 
   // I2C
