@@ -131,7 +131,9 @@
 
 #define HEALTH_SYNC_INTERVAL_MS    60000UL
 #define DEVICE_HEARTBEAT_INTERVAL_MS 10000UL
-#define CONFIG_SYNC_INTERVAL_MS    60000UL
+// The operational snapshot is read from LittleFS. Every 30 seconds, when
+// idle, queued local sales are sent first and the cloud snapshot is refreshed.
+#define LOCAL_DATA_SYNC_INTERVAL_MS 30000UL
 #define PIN_MONITOR_CONTROL_INTERVAL_MS 5000UL
 #define PIN_DIAGNOSTIC_INTERVAL_MS       2000UL
 #define PIN_DIAGNOSTIC_SETTLE_MS            5UL

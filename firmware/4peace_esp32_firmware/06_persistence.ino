@@ -4,6 +4,130 @@
 // Persistence / offline journal
 // ============================================================================
 
+static const char *MACHINE_CONFIG_CACHE_FILE = "/machine_config.json";
+static const char *SLOTS_CACHE_FILE = "/slots.json";
+
+// Write through a temporary file, then replace the old cache. A power loss
+// therefore leaves either the previous complete JSON file or a temporary file
+// that is ignored on the next boot -- never a partially-written live cache.
+static bool writeJsonCache(const char *path, JsonDocument &doc) {
+  if (!filesystemMounted) return false;
+
+  String temporaryPath = String(path) + ".tmp";
+  LittleFS.remove(temporaryPath);
+  File file = LittleFS.open(temporaryPath, FILE_WRITE);
+  if (!file) {
+    Serial.printf("[LittleFS] Cannot open %s for writing.\n", temporaryPath.c_str());
+    return false;
+  }
+
+  const size_t written = serializeJson(doc, file);
+  file.flush();
+  file.close();
+  if (written == 0) {
+    LittleFS.remove(temporaryPath);
+    return false;
+  }
+
+  if (!LittleFS.rename(temporaryPath, path)) {
+    Serial.printf("[LittleFS] Cannot replace %s.\n", path);
+    return false;
+  }
+  return true;
+}
+
+bool saveMachineConfigCache() {
+  DynamicJsonDocument doc(1024);
+  doc["version"] = 1;
+  doc["unit_price"] = unitPrice;
+  doc["low_stock_threshold"] = lowStockThreshold;
+  doc["admin_sms_number"] = adminSmsNumber;
+  doc["tamper_alarm_enabled"] = tamperAlarmEnabled;
+  doc["enable_pin_connection_detection"] = pinConnectionDetectionEnabled;
+
+  const bool saved = writeJsonCache(MACHINE_CONFIG_CACHE_FILE, doc);
+  Serial.printf("[LittleFS] machine_config %s.\n", saved ? "saved" : "save failed");
+  return saved;
+}
+
+bool saveSlotsCache() {
+  DynamicJsonDocument doc(2048);
+  doc["version"] = 1;
+  JsonArray cachedSlots = doc.createNestedArray("slots");
+  for (int i = 0; i < 5; i++) {
+    JsonObject item = cachedSlots.createNestedObject();
+    item["id"] = slots[i].id;
+    item["slot_code"] = slots[i].slotCode;
+    item["product_name"] = slots[i].productName;
+    item["stock"] = slots[i].stock;
+    item["capacity"] = slots[i].capacity;
+  }
+
+  const bool saved = writeJsonCache(SLOTS_CACHE_FILE, doc);
+  Serial.printf("[LittleFS] slots %s.\n", saved ? "saved" : "save failed");
+  return saved;
+}
+
+static bool loadMachineConfigCache() {
+  if (!filesystemMounted || !LittleFS.exists(MACHINE_CONFIG_CACHE_FILE)) return false;
+  File file = LittleFS.open(MACHINE_CONFIG_CACHE_FILE, FILE_READ);
+  if (!file) return false;
+
+  DynamicJsonDocument doc(1024);
+  DeserializationError error = deserializeJson(doc, file);
+  file.close();
+  if (error || doc["version"] != 1) return false;
+
+  unitPrice = doc["unit_price"] | unitPrice;
+  lowStockThreshold = doc["low_stock_threshold"] | lowStockThreshold;
+  adminSmsNumber = doc["admin_sms_number"] | adminSmsNumber;
+  tamperAlarmEnabled = doc["tamper_alarm_enabled"] | tamperAlarmEnabled;
+  pinConnectionDetectionEnabled = doc["enable_pin_connection_detection"] | false;
+  return isfinite(unitPrice) && unitPrice > 0.0f && lowStockThreshold >= 0;
+}
+
+static bool loadSlotsCache() {
+  if (!filesystemMounted || !LittleFS.exists(SLOTS_CACHE_FILE)) return false;
+  File file = LittleFS.open(SLOTS_CACHE_FILE, FILE_READ);
+  if (!file) return false;
+
+  DynamicJsonDocument doc(2048);
+  DeserializationError error = deserializeJson(doc, file);
+  file.close();
+  if (error || doc["version"] != 1 || !doc["slots"].is<JsonArray>()) return false;
+
+  int loaded = 0;
+  for (JsonObject item : doc["slots"].as<JsonArray>()) {
+    int id = item["id"] | -1;
+    String code = item["slot_code"] | "";
+    for (int i = 0; i < 5; i++) {
+      if (id != slots[i].id && code != slots[i].slotCode) continue;
+      String product = item["product_name"] | "";
+      int stock = item["stock"] | -1;
+      int capacity = item["capacity"] | -1;
+      if (!code.length() || !product.length() || stock < 0 || capacity < 0) return false;
+      slots[i].id = id;
+      slots[i].slotCode = code;
+      slots[i].productName = product;
+      slots[i].stock = stock;
+      slots[i].capacity = capacity;
+      loaded++;
+      break;
+    }
+  }
+  return loaded == 5;
+}
+
+bool loadLocalMachineData() {
+  const bool configLoaded = loadMachineConfigCache();
+  const bool slotsLoaded = loadSlotsCache();
+  const bool ready = configLoaded && slotsLoaded;
+  Serial.printf("[LittleFS] Local snapshot config=%s slots=%s\n",
+                configLoaded ? "OK" : "MISSING/INVALID",
+                slotsLoaded ? "OK" : "MISSING/INVALID");
+  return ready;
+}
+
 void loadPersistentStocks() {
   totalCoinBoxPulses = prefs.getULong("coinTotal", 0);
   currentCredit = prefs.getFloat("credit", 0.0f);
@@ -35,11 +159,19 @@ bool persistStock(int slotIdx) {
 
   char keyName[8];
   snprintf(keyName, sizeof(keyName), "stock%d", slotIdx);
+  bool nvsSaved = false;
   for (int attempt = 0; attempt < 3; attempt++) {
-    if (prefs.putInt(keyName, slots[slotIdx].stock) == sizeof(int32_t)) return true;
+    if (prefs.putInt(keyName, slots[slotIdx].stock) == sizeof(int32_t)) {
+      nvsSaved = true;
+      break;
+    }
     delay(5);
   }
-  return false;
+  // A vend is usable offline only after its current stock has reached the
+  // LittleFS JSON snapshot. NVS remains a secondary recovery copy.
+  const bool cacheSaved = saveSlotsCache();
+  if (cacheSaved) localDataReady = true;
+  return nvsSaved && cacheSaved;
 }
 
 bool pendingQueueHasSpace() {
@@ -233,8 +365,8 @@ bool queueSmsEvent(const String &eventType, const String &message) {
       Serial.printf("[SMS] Queued %s in %s\n",
                     event.clientEventId.c_str(), keyName);
 
-      // This only uploads the durable event. It does not call the modem.
-      if (WiFi.status() == WL_CONNECTED) syncPendingSmsOutbox();
+      // Upload happens only in the idle periodic sync. Never let a vend wait
+      // for a cloud response after the local event has been made durable.
       return true;
     }
 

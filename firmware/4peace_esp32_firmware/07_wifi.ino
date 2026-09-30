@@ -4,6 +4,76 @@
 // Wi-Fi
 // ============================================================================
 
+enum InitialLittleFsSyncStep {
+  INITIAL_SYNC_CONFIG,
+  INITIAL_SYNC_SLOTS
+};
+
+static InitialLittleFsSyncStep initialLittleFsSyncStep = INITIAL_SYNC_CONFIG;
+
+// Startup is deliberately sequential: each required cloud record is fetched,
+// validated, written to LittleFS, acknowledged on the LCD for 2.5 seconds,
+// then the next record begins. No default/server-dependent vending is enabled
+// until both files are present.
+void serviceInitialLittleFsSync() {
+  if (!filesystemMounted) {
+    updateLcd("LittleFS Error", "Service Locked");
+    return;
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    if (localDataReady) {
+      updateLcd("WiFi Offline", "Cached Local Mode");
+      currentState = STATE_IDLE;
+      stateTimer = millis();
+    } else {
+      updateLcd("No Local Data", "Waiting WiFi");
+    }
+    return;
+  }
+
+  if (initialLittleFsSyncStep == INITIAL_SYNC_CONFIG) {
+    updateLcd("Config Fetching", "Please Wait");
+    if (!httpFetchConfig()) {
+      updateLcd("Config Fetch Fail", "Retrying...");
+      delay(1000);
+      return;
+    }
+
+    updateLcd("Config Saved", "Successfully");
+    delay(2500);
+    initialLittleFsSyncStep = INITIAL_SYNC_SLOTS;
+    return;
+  }
+
+  // Offline sales are the only locally changed database data. Upload them
+  // before accepting a new cloud inventory snapshot, otherwise a server read
+  // could overwrite stock that has already physically dispensed.
+  if (hasPendingTransactions()) {
+    updateLcd("Sales Updating", "Please Wait");
+    syncPendingTransactions();
+    if (hasPendingTransactions()) {
+      delay(1000);
+      return;
+    }
+  }
+
+  updateLcd("Slots Fetching", "Please Wait");
+  if (!httpFetchSlots()) {
+    updateLcd("Slots Fetch Fail", "Retrying...");
+    delay(1000);
+    return;
+  }
+
+  updateLcd("Slots Saved", "Successfully");
+  delay(2500);
+  localDataReady = true;
+  lastLocalDataSyncTime = millis();
+  currentState = STATE_IDLE;
+  stateTimer = millis();
+  Serial.println("[LittleFS] Initial offline snapshot ready.");
+}
+
 void handleWiFiReconnect() {
   static bool initialized = false;
   static bool wasConnected = false;
@@ -31,10 +101,14 @@ void handleWiFiReconnect() {
       syncPendingSmsOutbox();
 
       if (!hasPendingTransactions()) {
-        httpFetchConfig();
-        httpFetchSlots();
+        const bool configSaved = httpFetchConfig();
+        const bool slotsSaved = configSaved && httpFetchSlots();
+        if (configSaved && slotsSaved) {
+          localDataReady = true;
+          lastLocalDataSyncTime = millis();
+        }
       }
-      recoverySyncPending = false;
+      recoverySyncPending = hasPendingTransactions();
     }
     return;
   }

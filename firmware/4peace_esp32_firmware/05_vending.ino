@@ -371,11 +371,6 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
   logEsp32Event("dispense", s.slotCode + " - " + s.productName +
                 " dispensed successfully; stock " + String(s.stock));
 
-  // Best-effort immediate cloud sync.
-  if (WiFi.status() == WL_CONNECTED) {
-    syncPendingTransactions();
-  }
-
   String paymentMessage =
     "4Peace: Payment received P" + String(unitPrice, 2) +
     " via " + method + " for " + s.slotCode;
@@ -391,15 +386,6 @@ bool executeDispense(int slotIdx, const String &method, const String &refCode) {
     String msg =
       "Slot " + s.slotCode + " (" + s.productName + ") low stock: " +
       String(s.stock) + " left";
-
-    if (WiFi.status() == WL_CONNECTED) {
-      httpLogMachineAlert(s.stock == 0 ? "critical" : "warning", msg);
-      httpPostNotification(
-        "stock",
-        s.stock == 0 ? "critical" : "warning",
-        msg
-      );
-    }
 
     queueSmsEvent("low_stock", "4Peace: " + msg);
   }

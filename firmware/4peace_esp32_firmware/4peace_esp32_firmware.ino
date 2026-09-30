@@ -156,7 +156,7 @@ unsigned long stateTimer = 0;
 unsigned long gcashPollTimer = 0;
 unsigned long lastHealthSyncTime = 0;
 unsigned long lastDeviceHeartbeatTime = 0;
-unsigned long lastConfigSyncTime = 0;
+unsigned long lastLocalDataSyncTime = 0;
 unsigned long lastPinMonitorControlTime = 0;
 unsigned long lastPinDiagnosticTime = 0;
 unsigned long lastWiFiRetryTime = 0;
@@ -167,6 +167,7 @@ unsigned long paymentRetryPromptUntil = 0;
 int gsmSignalPct = -1;
 volatile bool motorActive = false;
 bool filesystemMounted = false;
+bool localDataReady = false;
 bool pinConnectionDetectionEnabled = false;
 bool esp32LogUploadInProgress = false;
 
@@ -215,6 +216,9 @@ void processDeferredDispenseFailureAlert();
 
 // Persistence
 void loadPersistentStocks();
+bool loadLocalMachineData();
+bool saveMachineConfigCache();
+bool saveSlotsCache();
 bool persistStock(int slotIdx);
 bool pendingQueueHasSpace();
 bool hasPendingTransactions();
@@ -250,6 +254,7 @@ bool httpRecordSmsFailure(uint32_t smsId, int nextAttemptCount, const String &er
 bool httpInsertEsp32Log(const String &level, const String &category, const String &message);
 void addSupabaseHeaders(HTTPClient &http, bool json = false);
 void configureSecureClient(WiFiClientSecure &client);
+void serviceInitialLittleFsSync();
 
 // GSM
 bool gsmInit();
@@ -363,6 +368,10 @@ void setup() {
 #endif
 
   loadPersistentStocks();
+  // The LittleFS snapshot is the data used by vending while the network is
+  // unavailable. NVS remains only for the write-ahead transaction journal
+  // and as a compatibility copy of stock counters.
+  localDataReady = loadLocalMachineData();
 
   // GSM initialization is allowed to fail without blocking vending.
   if (!gsmInit()) {
@@ -387,17 +396,20 @@ void setup() {
     Serial.println(WiFi.localIP());
     logEsp32Event("wifi", "Connected to Wi-Fi; IP " + WiFi.localIP().toString());
 
-    // Replay offline sales FIRST, then fetch server stock.
-    syncPendingTransactions();
-    syncPendingSmsOutbox();
-    httpProcessPendingSms();
-
     currentState = STATE_SYNC_CONFIG;
   } else {
-    Serial.println("[WiFi] Offline. Local vending mode active.");
-    updateLcd("WiFi Offline", "Local Mode");
-    delay(1000);
-    currentState = STATE_IDLE;
+    if (localDataReady) {
+      Serial.println("[WiFi] Offline. Using validated LittleFS snapshot.");
+      updateLcd("WiFi Offline", "Cached Local Mode");
+      delay(1000);
+      currentState = STATE_IDLE;
+    } else {
+      // A first boot must not vend with defaults or incomplete data. It waits
+      // here until Wi-Fi can download and save both required JSON files.
+      Serial.println("[WiFi] Offline and no valid LittleFS snapshot.");
+      updateLcd("No Local Data", "Waiting WiFi");
+      currentState = STATE_SYNC_CONFIG;
+    }
   }
 
   stateTimer = millis();
@@ -439,14 +451,6 @@ void loop() {
     httpHeartbeatDevice();
   }
 
-  // This setting-only read gives the dashboard switch a fast response.
-  // PIN values are neither read nor uploaded unless the switch is enabled.
-  if (maintenanceAllowed && WiFi.status() == WL_CONNECTED &&
-      millis() - lastPinMonitorControlTime >= PIN_MONITOR_CONTROL_INTERVAL_MS) {
-    lastPinMonitorControlTime = millis();
-    httpFetchPinMonitoringState();
-  }
-
   if (pinConnectionDetectionEnabled && currentState == STATE_IDLE && !motorActive) {
     runPinConnectionDiagnostics();
   }
@@ -462,11 +466,13 @@ void loop() {
     httpProcessPendingSms();
   }
 
-  // Periodic server config/stock refresh only while safely idle
+  // The cloud is synchronized only from this idle maintenance window. A
+  // completed vend has already updated LittleFS plus its durable transaction
+  // journal, so customer operation never waits for this HTTP work.
   if (WiFi.status() == WL_CONNECTED &&
       currentState == STATE_IDLE &&
-      millis() - lastConfigSyncTime >= CONFIG_SYNC_INTERVAL_MS) {
-    lastConfigSyncTime = millis();
+      millis() - lastLocalDataSyncTime >= LOCAL_DATA_SYNC_INTERVAL_MS) {
+    lastLocalDataSyncTime = millis();
 
     syncPendingTransactions();
 
@@ -489,18 +495,7 @@ void loop() {
 
   switch (currentState) {
     case STATE_SYNC_CONFIG: {
-      updateLcd("Syncing Cloud", "Please Wait");
-
-      syncPendingTransactions();
-      bool configOk = httpFetchConfig();
-      bool stockOk = httpFetchSlots();
-      bool healthOk = httpSyncDeviceHealth();
-      Serial.printf("[CLOUD] Config=%s Stock=%s Health=%s\n",
-        configOk ? "OK" : "FAILED", stockOk ? "OK" : "PENDING/FAILED",
-        healthOk ? "OK" : "FAILED");
-
-      currentState = STATE_IDLE;
-      stateTimer = millis();
+      serviceInitialLittleFsSync();
       break;
     }
 

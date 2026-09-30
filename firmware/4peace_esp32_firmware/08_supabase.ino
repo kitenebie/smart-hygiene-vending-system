@@ -183,8 +183,22 @@ bool httpFetchConfig() {
 
   JsonObject obj = doc[0].as<JsonObject>();
 
-  unitPrice = obj["unit_price"] | unitPrice;
-  lowStockThreshold = obj["low_stock_threshold"] | lowStockThreshold;
+  if (obj["unit_price"].isNull() || obj["low_stock_threshold"].isNull() ||
+      obj["tamper_alarm_enabled"].isNull()) {
+    Serial.println("[CONFIG] Required settings missing from cloud response.");
+    return false;
+  }
+
+  const float fetchedUnitPrice = obj["unit_price"].as<float>();
+  const int fetchedLowStockThreshold = obj["low_stock_threshold"].as<int>();
+  if (!isfinite(fetchedUnitPrice) || fetchedUnitPrice <= 0.0f ||
+      fetchedLowStockThreshold < 0) {
+    Serial.println("[CONFIG] Invalid settings in cloud response.");
+    return false;
+  }
+
+  unitPrice = fetchedUnitPrice;
+  lowStockThreshold = fetchedLowStockThreshold;
 
   if (obj["admin_sms_number"].is<const char*>()) {
     adminSmsNumber = obj["admin_sms_number"].as<String>();
@@ -210,7 +224,9 @@ bool httpFetchConfig() {
     tamperAlarmEnabled ? "ON" : "OFF"
   );
 
-  return true;
+  // A cloud response is not considered synchronized until it is safely saved
+  // as the offline operating snapshot.
+  return saveMachineConfigCache();
 }
 
 bool httpFetchPinMonitoringState() {
@@ -291,6 +307,16 @@ bool httpFetchSlots() {
   if (!doc.is<JsonArray>()) return false;
 
   JsonArray arr = doc.as<JsonArray>();
+  if (arr.size() != 5) {
+    Serial.printf("[SLOTS] Expected 5 slot rows, received %u.\n", (unsigned int)arr.size());
+    return false;
+  }
+
+  // Do not let an incomplete response partially replace the live offline
+  // snapshot. The old snapshot stays active until all five records validate.
+  SlotItem previousSlots[5];
+  bool updatedSlots[5] = {false, false, false, false, false};
+  for (int i = 0; i < 5; i++) previousSlots[i] = slots[i];
 
   for (JsonObject obj : arr) {
     int id = obj["id"] | -1;
@@ -299,21 +325,52 @@ bool httpFetchSlots() {
     int stock = obj["stock"] | 0;
     int capacity = obj["capacity"] | 0;
 
+    if (obj["id"].isNull() || obj["stock"].isNull() || obj["capacity"].isNull() ||
+        id <= 0 || !slotCode.length() || !productName.length() ||
+        stock < 0 || capacity < 0) {
+      for (int restore = 0; restore < 5; restore++) slots[restore] = previousSlots[restore];
+      Serial.println("[SLOTS] Invalid row in cloud response.");
+      return false;
+    }
+
+    bool matched = false;
     for (int i = 0; i < 5; i++) {
-      if (slots[i].id == id || slots[i].slotCode == slotCode) {
+      if (previousSlots[i].id == id || previousSlots[i].slotCode == slotCode) {
+        if (updatedSlots[i]) {
+          for (int restore = 0; restore < 5; restore++) slots[restore] = previousSlots[restore];
+          Serial.println("[SLOTS] Duplicate slot row in cloud response.");
+          return false;
+        }
         slots[i].id = id;
         if (slotCode.length()) slots[i].slotCode = slotCode;
         if (productName.length()) slots[i].productName = productName;
         slots[i].stock = stock;
         slots[i].capacity = capacity;
-        persistStock(i);
+        updatedSlots[i] = true;
+        matched = true;
         break;
       }
     }
+    if (!matched) {
+      for (int restore = 0; restore < 5; restore++) slots[restore] = previousSlots[restore];
+      Serial.println("[SLOTS] Unknown slot row in cloud response.");
+      return false;
+    }
   }
 
-  Serial.println("[SLOTS] Cloud inventory synchronized.");
-  return true;
+  for (int i = 0; i < 5; i++) {
+    if (!updatedSlots[i]) {
+      for (int restore = 0; restore < 5; restore++) slots[restore] = previousSlots[restore];
+      Serial.println("[SLOTS] Cloud response did not contain every slot.");
+      return false;
+    }
+  }
+
+  // Save all five records together so a following offline vend reads a
+  // complete JSON snapshot instead of depending on the server response.
+  const bool saved = saveSlotsCache();
+  if (saved) Serial.println("[SLOTS] Cloud inventory synchronized to LittleFS.");
+  return saved;
 }
 
 int httpSubmitGcashPayment(
@@ -353,14 +410,6 @@ int httpSubmitGcashPayment(
   Serial.printf("[GCASH] Submit HTTP %d\n", code);
 
   http.end();
-
-  if (code == 200 || code == 201) {
-    httpPostNotification(
-      "gcash",
-      "info",
-      "New GCash ref " + maskGcashReference(refCode) + " awaiting approval"
-    );
-  }
 
   return code;
 }
