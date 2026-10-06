@@ -1,5 +1,8 @@
 // Arduino IDE tab: 10_diagnostics.ino
 // Shared globals and declarations are in 4peace_esp32_firmware.ino.
+// Guide: readRailVoltage() converts ADC millivolts using the board's
+// divider ratio, pero only kapag ENABLE_VOLTAGE_MONITOR is on. If disabled,
+// it returns zero and does not pretend na may valid voltage measurement.
 
 // Voltage diagnostics
 // ============================================================================

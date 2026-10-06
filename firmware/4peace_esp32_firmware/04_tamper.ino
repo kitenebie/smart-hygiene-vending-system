@@ -1,5 +1,9 @@
 // Arduino IDE tab: 04_tamper.ino
 // Shared globals and declarations are in 4peace_esp32_firmware.ino.
+// Guide: handleTamperCheck() safely reads vibration edges gathered by
+// the interrupt, then checks kung umabot sa required count within the time
+// window. May enable switch at cooldown para hindi spam ang alert. Kapag valid,
+// magbe-beep, magpapadala ng cloud alert when online, at magpi-queue ng SMS.
 
 // Tamper
 // ============================================================================

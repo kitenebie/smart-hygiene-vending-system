@@ -1,5 +1,12 @@
 // Arduino IDE tab: 08_supabase.ino
 // Shared globals and declarations are in 4peace_esp32_firmware.ino.
+// Guide: this is the HTTPS boundary between the ESP32 and Supabase.
+// Shared helpers configure TLS, headers, and safe request logs; endpoint
+// functions fetch config/slots, submit and verify GCash, complete a vend, and
+// sync health/alerts. Diagnostics are buffered for idle-time upload, while SMS
+// events first enter the server queue before the SIM800L delivery workflow.
+// Bawat endpoint checks its relevant HTTP status and, where applicable, JSON
+// response bago i-report sa caller na valid ang remote data/acknowledgement.
 
 // HTTP / Supabase
 // ============================================================================

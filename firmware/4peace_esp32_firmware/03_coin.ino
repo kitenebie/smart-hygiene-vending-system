@@ -1,5 +1,10 @@
 // Arduino IDE tab: 03_coin.ino
 // Shared globals and declarations are in 4peace_esp32_firmware.ino.
+// Guide: coin acceptor pulses are collected asynchronously; dito
+// hinihintay muna matapos ang pulse train bago i-decode as P1/P5/P10. Valid
+// amount is added to credit and saved locally, then the screen/state is
+// updated. Hindi ito mismo nagpapaandar ng motor; the main loop starts the vend
+// kapag may selected slot at sapat na ang credit. Noisy pulse counts are rejected.
 
 // Coin processing
 // ============================================================================

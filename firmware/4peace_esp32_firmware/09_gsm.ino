@@ -1,5 +1,10 @@
 // Arduino IDE tab: 09_gsm.ino
 // Shared globals and declarations are in 4peace_esp32_firmware.ino.
+// Guide: these helpers talk to the SIM800L over SerialGSM using AT
+// commands. gsmInit() configures text SMS mode; gsmSendSMS() validates the
+// recipient, waits for the modem prompt, sends the message, then requires a
+// successful modem acknowledgement. Signal strength is converted to percent;
+// invalid/no-signal readings return -1 instead of fake data.
 
 // SIM800L
 // ============================================================================

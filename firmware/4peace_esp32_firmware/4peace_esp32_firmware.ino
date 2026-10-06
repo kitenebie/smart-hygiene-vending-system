@@ -39,6 +39,13 @@
  * ============================================================================
  */
 
+// Guide: ito ang shared firmware entry point and global state na gamit
+// ng ibang Arduino tabs. setup() initializes hardware, restores local records,
+// then chooses cached offline mode or required cloud sync. Every loop pass
+// services coin/tamper/Wi-Fi, scans keypad, and advances the payment state;
+// HTTP maintenance is kept in idle windows. Coin and GCash converge on the
+// same IR-confirmed executeDispense() path before payment/stock are finalized.
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>

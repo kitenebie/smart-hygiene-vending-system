@@ -1,6 +1,11 @@
 // Arduino IDE tab: all ESP32-WROOM GPIO status monitoring.
 // Diagnostics are deliberately non-invasive: live relay, buzzer, UART, I2C,
 // and sensor pin modes are never changed while the machine is powered.
+// Guide: kapag enabled at idle/motor-off lang tumatakbo ang scan.
+// Inputs are sampled, I2C devices are checked for ACK, and output pins are
+// only read back at their safe configured level; active UART/flash pins are
+// left untouched. Results are labeled and sent to the pin-status RPC, where
+// "connected" means the firmware's safe check passed—not a full wiring test.
 
 enum PinCheckKind { PIN_READ_ONLY, PIN_OUTPUT_PROBE, PIN_NO_TOUCH };
 

@@ -1,5 +1,11 @@
 // Arduino IDE tab: 05_vending.ino
 // Shared globals and declarations are in 4peace_esp32_firmware.ino.
+// Guide: executeDispense() ang common physical vend path for coin and
+// approved GCash. It validates slot/queues and clear IR first, then writes a
+// PREPARED journal before energizing the relay. Bounded retries wait for a new
+// IR drop; only confirmed success deducts coin credit, decrements local stock,
+// marks the journal complete, and queues receipts/low-stock SMS. Kapag walang
+// drop, retained ang payment and the prepared journal is cleared or service locks.
 
 // Dispensing
 // ============================================================================

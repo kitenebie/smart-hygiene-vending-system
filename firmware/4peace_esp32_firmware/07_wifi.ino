@@ -1,5 +1,10 @@
 // Arduino IDE tab: 07_wifi.ino
 // Shared globals and declarations are in 4peace_esp32_firmware.ino.
+// Guide: initial sync fetches config first, then uploads pending sales
+// bago kumuha ng bagong slot snapshot, para hindi ma-overwrite ang offline
+// stock changes. If Wi-Fi is down, valid LittleFS data allows local vending;
+// without it, service stays locked. Reconnect is non-blocking, and recovery
+// replay/snapshot refresh happens only while idle and motor-off.
 
 // Wi-Fi
 // ============================================================================

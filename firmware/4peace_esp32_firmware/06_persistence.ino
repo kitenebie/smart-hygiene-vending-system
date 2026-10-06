@@ -1,5 +1,11 @@
 // Arduino IDE tab: 06_persistence.ino
 // Shared globals and declarations are in 4peace_esp32_firmware.ino.
+// Guide: this file keeps the machine usable offline. LittleFS stores
+// config/slot snapshots using temp-file then rename, habang Preferences/NVS
+// stores credit, stock copy, prepared vend journal, and durable SMS outbox.
+// Prepared-but-unresolved or corrupt sales lock vending for safety. Completed
+// transactions and SMS events are replayed to Supabase later, then removed
+// only after acknowledgement para hindi mawala ang offline work.
 
 // Persistence / offline journal
 // ============================================================================

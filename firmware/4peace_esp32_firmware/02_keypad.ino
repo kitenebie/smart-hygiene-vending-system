@@ -1,5 +1,8 @@
 // Arduino IDE tab: 02_keypad.ino
 // Shared globals and declarations are in 4peace_esp32_firmware.ino.
+// Guide: scanKeypadRaw() reads the PCF8574 matrix, tapos
+// scanKeypadPCF8574() waits for a stable press/release para hindi mag-double
+// input. handleKeypress() interprets each key based sa current machine state.
 
 // Keypad
 // ============================================================================
@@ -91,6 +94,13 @@ String maskGcashReference(const String &reference) {
   return reference.substring(0, 3) + hidden + reference.substring(length - 3);
 }
 
+// Example flows: C selects coin mode; the physical coin slot has no keypad
+// key—its pulse sensor adds credit. Then press 1-5 for a product; once credit
+// covers the price, executeDispense() runs. For GCash, press B, then 1-5,
+// enter reference digits with 0-9, * deletes, and # submits. loop() polls for
+// approval before dispensing. A cancels the active selection/reference; it
+// never starts a vend. Both paths require IR drop confirmation before stock
+// is reduced.
 void handleKeypress(char key) {
   const bool hideGcashDigit =
     currentState == STATE_GCASH_INPUT && selectedSlotIndex >= 0 &&

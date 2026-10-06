@@ -1,5 +1,10 @@
   // Arduino IDE tab: 01_display.ino
 // Shared globals and declarations are in 4peace_esp32_firmware.ino.
+// Guide: Dito naka-centralize ang LCD formatting at customer feedback.
+// Laging 16 characters ang bawat LCD line, tapos iniiwasan ng updateLcd() ang
+// unnecessary redraws. Key feedback is a short overlay; after its timer, balik
+// ulit sa cached screen. showIdleScreen() naman nag-a-alternate ng welcome at
+// payment hints, while beepBuzzer() handles the simple audible cues.
 
 // UI
 // ============================================================================
