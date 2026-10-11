@@ -32,6 +32,15 @@ void handleCoinProcessing() {
 
   portENTER_CRITICAL(&coinMux);
   pulses = coinPulseCount;
+  lastMs = lastCoinPulseMs;
+
+  // Recheck while interrupts are held: a pulse can arrive between the first
+  // timeout check and clearing the counter. Do not split that coin into an
+  // invalid pulse batch.
+  if ((long)(millis() - lastMs) < COIN_PULSE_TIMEOUT_MS) {
+    portEXIT_CRITICAL(&coinMux);
+    return;
+  }
   coinPulseCount = 0;
   portEXIT_CRITICAL(&coinMux);
 
