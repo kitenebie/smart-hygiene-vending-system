@@ -26,6 +26,14 @@ void serviceInitialLittleFsSync() {
     return;
   }
 
+  // A validated cache can vend safely; queued sales replay from idle instead
+  // of trapping customers in startup sync when Supabase is temporarily down.
+  if (localDataReady) {
+    currentState = STATE_IDLE;
+    stateTimer = millis();
+    return;
+  }
+
   if (WiFi.status() != WL_CONNECTED) {
     if (localDataReady) {
       updateLcd("WiFi Offline", "Cached Local Mode");
