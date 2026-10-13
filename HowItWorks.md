@@ -188,10 +188,10 @@ sequenceDiagram
 2. **Display Update:** The LCD shows `Credit Complete! / Dispensing...`.
 3. **Relay Trigger:** The ESP32 sets the active LOW relay output for the chosen slot:
    - Slot 1: `GPIO 13`
-   - Slot 2: `GPIO 12`
-   - Slot 3: `GPIO 14`
-   - Slot 4: `GPIO 27`
-   - Slot 5: `GPIO 26`
+   - Slot 2: `GPIO 14`
+   - Slot 3: `GPIO 18`
+   - Slot 4: `GPIO 19`
+   - Slot 5: `GPIO 23`
 4. **Dispense Motor:** The 12V gear motor begins rotating the spiral coil, pushing the feminine hygiene product toward the front edge of the slot rack.
 
 ---
@@ -265,19 +265,19 @@ Immediately following drop verification, the ESP32 performs three cloud updates 
 
 | Function | Pin Name | Hardware Device | Active Level / Protocol |
 | :--- | :--- | :--- | :--- |
-| **Coin Signal Interrupt** | `GPIO 19` | Multi-Coin Acceptor | `FALLING` Interrupt Pulses |
+| **Coin Signal Interrupt** | `GPIO 26` | Multi-Coin Acceptor | `FALLING` Interrupt Pulses |
 | **LCD & Keypad Data** | `GPIO 21` | LCD & PCF8574 `SDA` | I2C Data Line (`0x27` / `0x20`) |
 | **LCD & Keypad Clock** | `GPIO 22` | LCD & PCF8574 `SCL` | I2C Clock Line |
 | **Slot S1 Relay** | `GPIO 13` | Relay Channel 1 | `LOW` = Motor ON, `HIGH` = Motor OFF |
-| **Slot S2 Relay** | `GPIO 12` | Relay Channel 2 | `LOW` = Motor ON, `HIGH` = Motor OFF |
-| **Slot S3 Relay** | `GPIO 14` | Relay Channel 3 | `LOW` = Motor ON, `HIGH` = Motor OFF |
-| **Slot S4 Relay** | `GPIO 27` | Relay Channel 4 | `LOW` = Motor ON, `HIGH` = Motor OFF |
-| **Slot S5 Relay** | `GPIO 26` | Relay Channel 5 | `LOW` = Motor ON, `HIGH` = Motor OFF |
-| **Slot S1 IR Drop Sensor** | `GPIO 15` | TCRT5000 Optical IR #1 | `LOW` = Drop Confirmed |
-| **Slot S2 IR Drop Sensor** | `GPIO 2` | TCRT5000 Optical IR #2 | `LOW` = Drop Confirmed |
-| **Slot S3 IR Drop Sensor** | `GPIO 34` | TCRT5000 Optical IR #3 | `LOW` = Drop Confirmed |
-| **Slot S4 IR Drop Sensor** | `GPIO 35` | TCRT5000 Optical IR #4 | `LOW` = Drop Confirmed |
-| **Slot S5 IR Drop Sensor** | `GPIO 32` | TCRT5000 Optical IR #5 | `LOW` = Drop Confirmed |
-| **Tamper Sensor** | `GPIO 33` | SW-420 Vibration Sensor | `FALLING` Interrupt |
+| **Slot S2 Relay** | `GPIO 14` | Relay Channel 2 | `LOW` = Motor ON, `HIGH` = Motor OFF |
+| **Slot S3 Relay** | `GPIO 18` | Relay Channel 3 | `LOW` = Motor ON, `HIGH` = Motor OFF |
+| **Slot S4 Relay** | `GPIO 19` | Relay Channel 4 | `LOW` = Motor ON, `HIGH` = Motor OFF |
+| **Slot S5 Relay** | `GPIO 23` | Relay Channel 5 | `LOW` = Motor ON, `HIGH` = Motor OFF |
+| **Slot S1 IR Drop Sensor** | `GPIO 34` | TCRT5000 Optical IR #1 | `LOW` = Drop Confirmed |
+| **Slot S2 IR Drop Sensor** | `GPIO 35` | TCRT5000 Optical IR #2 | `LOW` = Drop Confirmed |
+| **Slot S3 IR Drop Sensor** | `GPIO 32` | TCRT5000 Optical IR #3 | `LOW` = Drop Confirmed |
+| **Slot S4 IR Drop Sensor** | `GPIO 33` | TCRT5000 Optical IR #4 | `LOW` = Drop Confirmed |
+| **Slot S5 IR Drop Sensor** | `GPIO 27` | TCRT5000 Optical IR #5 | `LOW` = Drop Confirmed |
+| **Tamper Sensor** | `GPIO 4` | SW-420 Vibration Sensor | `FALLING` Interrupt |
 | **Buzzer** | `GPIO 25` | Active Buzzer | `HIGH` = Sound On |
 | **GSM Serial** | `GPIO 16 (RX2)`, `GPIO 17 (TX2)` | SIM800L Module | UART 9600 Baud |
