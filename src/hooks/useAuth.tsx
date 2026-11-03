@@ -14,7 +14,7 @@ export interface AdminUser {
 interface AuthCtx {
   admin: AdminUser | null;
   loading: boolean;
-  login: (identity: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateAdminState: (user: AdminUser) => void;
 }
@@ -44,9 +44,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
-  const login = async (identity: string, password: string) => {
-    const email = identity.trim().toLowerCase() === 'admin' ? 'team4peace@veritas.edu.ph' : identity.trim();
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const login = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     if (error || !data.user) return { success: false, error: 'Invalid email or password.' };
     const profile = await loadProfile(data.user.id, data.user.email);
     if (!profile) {
