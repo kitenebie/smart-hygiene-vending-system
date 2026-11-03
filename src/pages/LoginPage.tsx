@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 export default function LoginPage() {
   const { admin, login } = useAuth();
   const navigate = useNavigate();
-  const [username, setUsername] = useState('');
+  const [identity, setIdentity] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,12 +21,12 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!username.trim() || !password) {
-      setError('Please enter both username and password.');
+    if (!identity.trim() || !password) {
+      setError('Please enter both username/email and password.');
       return;
     }
     setLoading(true);
-    const res = await login(username, password);
+    const res = await login(identity, password);
     setLoading(false);
     if (res.success) {
       navigate('/', { replace: true });
@@ -52,16 +52,16 @@ export default function LoginPage() {
         {error && <div className="login-error">{error}</div>}
 
         <form className="login-form" onSubmit={handleSubmit}>
-          <label className="field-label" htmlFor="username">Username</label>
+          <label className="field-label" htmlFor="identity">Username or email</label>
           <input
             type="text"
-            id="username"
+            id="identity"
             name="username"
             className="input"
             placeholder="admin"
             autoComplete="username"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
+            value={identity}
+            onChange={e => setIdentity(e.target.value)}
             required
             autoFocus
           />

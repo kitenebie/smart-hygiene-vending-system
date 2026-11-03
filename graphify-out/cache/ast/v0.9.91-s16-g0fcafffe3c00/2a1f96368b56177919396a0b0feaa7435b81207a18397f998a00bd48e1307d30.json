@@ -1,0 +1,1 @@
+{"nodes": [{"id": "$graphify-root$_firmware_4peace_esp32_firmware_supabase_ca_h", "label": "supabase_ca.h", "file_type": "code", "source_file": "firmware/4peace_esp32_firmware/supabase_ca.h", "source_location": "L1"}], "edges": [], "raw_calls": [], "parse_errors": {"first_error_line": 3, "multiline_error": true}}

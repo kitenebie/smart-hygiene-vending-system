@@ -1,0 +1,272 @@
+{
+  ".oxlintrc.json": {
+    "mtime": 1789005137.2300677,
+    "seen": 1793706883.4910634,
+    "ast_hash": "029f4905006c1fffd96bc863e2d98d3e",
+    "semantic_hash": "029f4905006c1fffd96bc863e2d98d3e"
+  },
+  "Php_Version/api/settings_get.php": {
+    "mtime": 1793702663.3962517,
+    "seen": 1793706883.4910634,
+    "ast_hash": "162962bc79fa28cdcb72875bbdf004d4",
+    "semantic_hash": "162962bc79fa28cdcb72875bbdf004d4"
+  },
+  "Php_Version/api/settings_save.php": {
+    "mtime": 1793702663.404475,
+    "seen": 1793706883.4910634,
+    "ast_hash": "97fe5351741848cbe8add1676b5e0f57",
+    "semantic_hash": "97fe5351741848cbe8add1676b5e0f57"
+  },
+  "Php_Version/assets/js/app.js": {
+    "mtime": 1793702663.4775822,
+    "seen": 1793706883.4910634,
+    "ast_hash": "2b58605af36f968ae30f7c4ba5ea3def",
+    "semantic_hash": "2b58605af36f968ae30f7c4ba5ea3def"
+  },
+  "Php_Version/includes/supabase_sync.php": {
+    "mtime": 1793702663.5066307,
+    "seen": 1793706883.4910634,
+    "ast_hash": "965585f7bed503e442a05523ce7cbf3d",
+    "semantic_hash": "965585f7bed503e442a05523ce7cbf3d"
+  },
+  "Php_Version/index.php": {
+    "mtime": 1793702663.3501334,
+    "seen": 1793706883.4910634,
+    "ast_hash": "a4b8d7548dd3c9e48edbeac240bc4934",
+    "semantic_hash": "a4b8d7548dd3c9e48edbeac240bc4934"
+  },
+  "firmware/4peace_esp32_firmware/config.h": {
+    "mtime": 1790774448.696427,
+    "seen": 1793706883.4910634,
+    "ast_hash": "e155b313c654ba49aa7641004ff26034",
+    "semantic_hash": "e155b313c654ba49aa7641004ff26034"
+  },
+  "firmware/4peace_esp32_firmware/config.local.example.h": {
+    "mtime": 1790210195.866002,
+    "seen": 1793706883.4910634,
+    "ast_hash": "77dded2c869b88ad424213b272fa34da",
+    "semantic_hash": "77dded2c869b88ad424213b272fa34da"
+  },
+  "firmware/4peace_esp32_firmware/supabase_ca.h": {
+    "mtime": 1789018593.0147762,
+    "seen": 1793706883.4910634,
+    "ast_hash": "aa13e9c5847db18204d166c4973be914",
+    "semantic_hash": "aa13e9c5847db18204d166c4973be914"
+  },
+  "package.json": {
+    "mtime": 1789018498.6935344,
+    "seen": 1793706883.4910634,
+    "ast_hash": "a0709c87dd4eef701f84a998d8697158",
+    "semantic_hash": "a0709c87dd4eef701f84a998d8697158"
+  },
+  "scripts/build-one-time-supabase-setup.mjs": {
+    "mtime": 1793705126.750176,
+    "seen": 1793706883.4910634,
+    "ast_hash": "dea7ca4800282134bdb3004bad636310",
+    "semantic_hash": "dea7ca4800282134bdb3004bad636310"
+  },
+  "scripts/export-legacy-mysql-to-supabase.mjs": {
+    "mtime": 1793703962.9001749,
+    "seen": 1793706883.4910634,
+    "ast_hash": "d164a3324366783569b02166eb7d78de",
+    "semantic_hash": "d164a3324366783569b02166eb7d78de"
+  },
+  "scripts/firmware-check.mjs": {
+    "mtime": 1789091839.7972271,
+    "seen": 1793706883.4910634,
+    "ast_hash": "f36226923c3cf804e54648b9bb1e8154",
+    "semantic_hash": "f36226923c3cf804e54648b9bb1e8154"
+  },
+  "scripts/firmware-configure.mjs": {
+    "mtime": 1789102551.866974,
+    "seen": 1793706883.4910634,
+    "ast_hash": "0c107f308e27f1dc3dec08c2021abfaf",
+    "semantic_hash": "0c107f308e27f1dc3dec08c2021abfaf"
+  },
+  "src/App.tsx": {
+    "mtime": 1789088409.2951405,
+    "seen": 1793706883.4910634,
+    "ast_hash": "0fef49e1631ef310ed12f27ccc35cbc4",
+    "semantic_hash": "0fef49e1631ef310ed12f27ccc35cbc4"
+  },
+  "src/components/AuthGuard.tsx": {
+    "mtime": 1789006147.01684,
+    "seen": 1793706883.4910634,
+    "ast_hash": "48271467479fb117d4a77a152e634bd0",
+    "semantic_hash": "48271467479fb117d4a77a152e634bd0"
+  },
+  "src/components/Esp32PinStatusModal.tsx": {
+    "mtime": 1791430162.5376499,
+    "seen": 1793706883.4910634,
+    "ast_hash": "2c60d540ae5a45dfb4284c69e5c752a2",
+    "semantic_hash": "2c60d540ae5a45dfb4284c69e5c752a2"
+  },
+  "src/components/NotificationSound.tsx": {
+    "mtime": 1789089450.033175,
+    "seen": 1793706883.4910634,
+    "ast_hash": "ae7afd7e3e184ec881d8cf98512c4824",
+    "semantic_hash": "ae7afd7e3e184ec881d8cf98512c4824"
+  },
+  "src/components/Sidebar.tsx": {
+    "mtime": 1789430471.9770758,
+    "seen": 1793706883.4910634,
+    "ast_hash": "5bb899ded303bc862d435bfa224ed2d0",
+    "semantic_hash": "5bb899ded303bc862d435bfa224ed2d0"
+  },
+  "src/components/SlotTag.tsx": {
+    "mtime": 1789018170.3937664,
+    "seen": 1793706883.4910634,
+    "ast_hash": "d81b417f1fb71a26c33a108b59aacbbc",
+    "semantic_hash": "d81b417f1fb71a26c33a108b59aacbbc"
+  },
+  "src/components/StatCard.tsx": {
+    "mtime": 1789005257.1271605,
+    "seen": 1793706883.4910634,
+    "ast_hash": "dff09ec248bb3cb38430621460264499",
+    "semantic_hash": "dff09ec248bb3cb38430621460264499"
+  },
+  "src/components/Switch.tsx": {
+    "mtime": 1789091839.7952218,
+    "seen": 1793706883.4910634,
+    "ast_hash": "56217cf7e4ddea82c4d8eb065ae19e5d",
+    "semantic_hash": "56217cf7e4ddea82c4d8eb065ae19e5d"
+  },
+  "src/components/Toast.tsx": {
+    "mtime": 1789005232.9428113,
+    "seen": 1793706883.4910634,
+    "ast_hash": "a87a50f3986190ac219d2af6334f0061",
+    "semantic_hash": "a87a50f3986190ac219d2af6334f0061"
+  },
+  "src/components/Topbar.tsx": {
+    "mtime": 1789185809.9716895,
+    "seen": 1793706883.4910634,
+    "ast_hash": "d788e8702cd5d0af9b21ecab2a4548c7",
+    "semantic_hash": "d788e8702cd5d0af9b21ecab2a4548c7"
+  },
+  "src/hooks/useAuth.tsx": {
+    "mtime": 1793705789.4711337,
+    "seen": 1793706883.4910634,
+    "ast_hash": "1fe214863229b2483863b6afde177ae6",
+    "semantic_hash": "1fe214863229b2483863b6afde177ae6"
+  },
+  "src/hooks/usePolling.ts": {
+    "mtime": 1789018285.0307329,
+    "seen": 1793706883.4910634,
+    "ast_hash": "9eb478b0038052bb3a82f70028ee26fc",
+    "semantic_hash": "9eb478b0038052bb3a82f70028ee26fc"
+  },
+  "src/hooks/useRealtimeRefresh.ts": {
+    "mtime": 1789089657.4013941,
+    "seen": 1793706883.4910634,
+    "ast_hash": "964cd049b04914f41c62ec21170293c9",
+    "semantic_hash": "964cd049b04914f41c62ec21170293c9"
+  },
+  "src/main.tsx": {
+    "mtime": 1789005554.4920602,
+    "seen": 1793706883.4910634,
+    "ast_hash": "787e5a07efeb2bf6209d5937195f2f68",
+    "semantic_hash": "787e5a07efeb2bf6209d5937195f2f68"
+  },
+  "src/pages/DashboardPage.tsx": {
+    "mtime": 1789430471.969944,
+    "seen": 1793706883.4910634,
+    "ast_hash": "0944b6a1d24ab3e970850c1a68238e3f",
+    "semantic_hash": "0944b6a1d24ab3e970850c1a68238e3f"
+  },
+  "src/pages/LoginPage.tsx": {
+    "mtime": 1793705789.4726987,
+    "seen": 1793706883.4910634,
+    "ast_hash": "aebfb731be735e2b58e0bae7757bee03",
+    "semantic_hash": "aebfb731be735e2b58e0bae7757bee03"
+  },
+  "src/utils/helpers.ts": {
+    "mtime": 1789430753.982063,
+    "seen": 1793706883.4910634,
+    "ast_hash": "1f1afc7836313f1c626d7c59e2bbb99a",
+    "semantic_hash": "1f1afc7836313f1c626d7c59e2bbb99a"
+  },
+  "src/utils/supabase.ts": {
+    "mtime": 1789102561.4933689,
+    "seen": 1793706883.4910634,
+    "ast_hash": "05cca65ce44d5adc5f6c839d1d6109f8",
+    "semantic_hash": "05cca65ce44d5adc5f6c839d1d6109f8"
+  },
+  "src/views/Esp32LogsView.tsx": {
+    "mtime": 1789430471.9629529,
+    "seen": 1793706883.4910634,
+    "ast_hash": "3970998b8ca7bde47c5af9b40a8cee83",
+    "semantic_hash": "3970998b8ca7bde47c5af9b40a8cee83"
+  },
+  "src/views/HealthView.tsx": {
+    "mtime": 1789194709.6477337,
+    "seen": 1793706883.4910634,
+    "ast_hash": "a41f8329b431a1eadc0124dbe5c87b72",
+    "semantic_hash": "a41f8329b431a1eadc0124dbe5c87b72"
+  },
+  "src/views/NotificationsView.tsx": {
+    "mtime": 1789088409.3131423,
+    "seen": 1793706883.4910634,
+    "ast_hash": "d6ec36f255a91814a4788cb42f05121d",
+    "semantic_hash": "d6ec36f255a91814a4788cb42f05121d"
+  },
+  "src/views/OverviewView.tsx": {
+    "mtime": 1789089627.4252346,
+    "seen": 1793706883.4910634,
+    "ast_hash": "d9c770948e4a1a6c7bbce2bc16563c13",
+    "semantic_hash": "d9c770948e4a1a6c7bbce2bc16563c13"
+  },
+  "src/views/SettingsView.tsx": {
+    "mtime": 1793706231.6465974,
+    "seen": 1793706883.4910634,
+    "ast_hash": "dd5182eb9e0c0ff0a79439a949bbfeec",
+    "semantic_hash": "dd5182eb9e0c0ff0a79439a949bbfeec"
+  },
+  "src/views/SlotsView.tsx": {
+    "mtime": 1789431637.0689802,
+    "seen": 1793706883.4910634,
+    "ast_hash": "8e32ffeda278b4ab08d752c8c405fe98",
+    "semantic_hash": "8e32ffeda278b4ab08d752c8c405fe98"
+  },
+  "src/views/SmsLogsView.tsx": {
+    "mtime": 1789089331.6619306,
+    "seen": 1793706883.4910634,
+    "ast_hash": "4f6ef3af6c81a7ab9c907ef01175832f",
+    "semantic_hash": "4f6ef3af6c81a7ab9c907ef01175832f"
+  },
+  "src/views/TransactionsView.tsx": {
+    "mtime": 1789430753.9860651,
+    "seen": 1793706883.4910634,
+    "ast_hash": "c7a537ba86225b3f65b1ff4ffecd31c2",
+    "semantic_hash": "c7a537ba86225b3f65b1ff4ffecd31c2"
+  },
+  "tsconfig.app.json": {
+    "mtime": 1789005137.272516,
+    "seen": 1793706883.4910634,
+    "ast_hash": "5f2dafd737dea8a4ddcbb10f5113ac5a",
+    "semantic_hash": "5f2dafd737dea8a4ddcbb10f5113ac5a"
+  },
+  "tsconfig.json": {
+    "mtime": 1789005137.2822893,
+    "seen": 1793706883.4910634,
+    "ast_hash": "a3d39fa780ebff65444de257f291ce6c",
+    "semantic_hash": "a3d39fa780ebff65444de257f291ce6c"
+  },
+  "tsconfig.node.json": {
+    "mtime": 1789005137.2924592,
+    "seen": 1793706883.4910634,
+    "ast_hash": "f9cb81ddcea69ffdab672fc8c48dca66",
+    "semantic_hash": "f9cb81ddcea69ffdab672fc8c48dca66"
+  },
+  "vite.config.ts": {
+    "mtime": 1789005137.5305104,
+    "seen": 1793706883.4910634,
+    "ast_hash": "5d54447744c19ccd28638a5c668d15ea",
+    "semantic_hash": "5d54447744c19ccd28638a5c668d15ea"
+  },
+  "public/notification.wav": {
+    "mtime": 1789088067.281927,
+    "seen": 1793706883.4910634,
+    "ast_hash": "a85c8c4465b53ae580cc641d106da99d",
+    "semantic_hash": "a85c8c4465b53ae580cc641d106da99d"
+  }
+}

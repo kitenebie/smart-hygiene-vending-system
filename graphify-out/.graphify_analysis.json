@@ -1,0 +1,522 @@
+{
+  "communities": {
+    "0": [
+      "ref_react",
+      "src_components_sidebar_sidebar",
+      "src_components_slottag",
+      "src_components_slottag_extrameta",
+      "src_components_slottag_slottag",
+      "src_components_slottag_slottagprops",
+      "src_components_slottag_status",
+      "src_components_statcard",
+      "src_components_statcard_statcard",
+      "src_components_statcard_statcardprops",
+      "src_components_toast",
+      "src_components_toast_toastcontext",
+      "src_components_toast_toastctx",
+      "src_components_toast_usetoast",
+      "src_hooks_usepolling",
+      "src_hooks_usepolling_usepolling",
+      "src_hooks_usepolling_usepolling_tick",
+      "src_hooks_userealtimerefresh",
+      "src_hooks_userealtimerefresh_userealtimerefresh",
+      "src_pages_dashboardpage",
+      "src_pages_dashboardpage_dashboardpage",
+      "src_pages_dashboardpage_dashboardpage_loadbadge",
+      "src_pages_dashboardpage_dashboardpage_loadesp32status",
+      "src_pages_dashboardpage_titles",
+      "src_pages_dashboardpage_view",
+      "src_utils_helpers",
+      "src_utils_helpers_downloadcsv",
+      "src_utils_helpers_levelmeta",
+      "src_utils_helpers_maskpaymentreference",
+      "src_utils_helpers_slotstatus",
+      "src_utils_helpers_statusmeta",
+      "src_utils_helpers_timeago",
+      "src_utils_supabase",
+      "src_utils_supabase_supabase",
+      "src_views_esp32logsview",
+      "src_views_esp32logsview_esp32log",
+      "src_views_esp32logsview_esp32logsview",
+      "src_views_esp32logsview_esp32logsview_load",
+      "src_views_notificationsview",
+      "src_views_notificationsview_notification",
+      "src_views_notificationsview_notificationsview",
+      "src_views_notificationsview_notificationsview_load",
+      "src_views_notificationsview_notificationsview_markallread",
+      "src_views_notificationsview_notificationsviewprops",
+      "src_views_overviewview",
+      "src_views_overviewview_overviewdata",
+      "src_views_overviewview_overviewview",
+      "src_views_overviewview_overviewview_load",
+      "src_views_overviewview_slotdata",
+      "src_views_slotsview",
+      "src_views_slotsview_slot",
+      "src_views_slotsview_slotsview",
+      "src_views_slotsview_slotsview_addstock",
+      "src_views_slotsview_slotsview_load",
+      "src_views_slotsview_slotsview_openrestock",
+      "src_views_smslogsview",
+      "src_views_smslogsview_attempttext",
+      "src_views_smslogsview_eventlabels",
+      "src_views_smslogsview_smslog",
+      "src_views_smslogsview_smslogsview",
+      "src_views_smslogsview_smslogsview_load",
+      "src_views_transactionsview",
+      "src_views_transactionsview_gcashpayment",
+      "src_views_transactionsview_transaction",
+      "src_views_transactionsview_transactionsview",
+      "src_views_transactionsview_transactionsview_exportcsv",
+      "src_views_transactionsview_transactionsview_loadall",
+      "src_views_transactionsview_transactionsview_loadgcash",
+      "src_views_transactionsview_transactionsview_loadtx",
+      "src_views_transactionsview_transactionsview_resolvegcash"
+    ],
+    "1": [
+      "php_version_assets_js_app",
+      "php_version_assets_js_app_activateview",
+      "php_version_assets_js_app_api",
+      "php_version_assets_js_app_closemobilemenu",
+      "php_version_assets_js_app_closepinmodal",
+      "php_version_assets_js_app_closerestockmodal",
+      "php_version_assets_js_app_currentslots",
+      "php_version_assets_js_app_escapehtml",
+      "php_version_assets_js_app_esp32pins",
+      "php_version_assets_js_app_formatbytes",
+      "php_version_assets_js_app_gcashstatusmeta",
+      "php_version_assets_js_app_healthcharts",
+      "php_version_assets_js_app_levelmeta",
+      "php_version_assets_js_app_loaders",
+      "php_version_assets_js_app_loadesp32logs",
+      "php_version_assets_js_app_loadgcashpending",
+      "php_version_assets_js_app_loadhealth",
+      "php_version_assets_js_app_loadnotifbadge",
+      "php_version_assets_js_app_loadnotifications",
+      "php_version_assets_js_app_loadoverview",
+      "php_version_assets_js_app_loadproductstable",
+      "php_version_assets_js_app_loadsettings",
+      "php_version_assets_js_app_loadslots",
+      "php_version_assets_js_app_loadsmslogs",
+      "php_version_assets_js_app_loadtransactions",
+      "php_version_assets_js_app_markallnotifsread",
+      "php_version_assets_js_app_maskpaymentreference",
+      "php_version_assets_js_app_menubackdrop",
+      "php_version_assets_js_app_menutoggle",
+      "php_version_assets_js_app_openpindeviceform",
+      "php_version_assets_js_app_openpinmodal",
+      "php_version_assets_js_app_openrestockmodal",
+      "php_version_assets_js_app_parsedatetime",
+      "php_version_assets_js_app_parsenumber",
+      "php_version_assets_js_app_pinlabels",
+      "php_version_assets_js_app_refreshfrombackup",
+      "php_version_assets_js_app_renderhealthresources",
+      "php_version_assets_js_app_renderoverviewcharts",
+      "php_version_assets_js_app_renderpinmodal",
+      "php_version_assets_js_app_resolvegcash",
+      "php_version_assets_js_app_savemachinesettings",
+      "php_version_assets_js_app_saveproduct",
+      "php_version_assets_js_app_saveprofile",
+      "php_version_assets_js_app_setswitch",
+      "php_version_assets_js_app_statusmeta",
+      "php_version_assets_js_app_submitrestock",
+      "php_version_assets_js_app_timeagolabel",
+      "php_version_assets_js_app_titles",
+      "php_version_assets_js_app_toast",
+      "php_version_assets_js_app_updatenotifbadge"
+    ],
+    "2": [
+      "package",
+      "package_dependencies",
+      "package_dependencies_apexcharts",
+      "package_dependencies_react",
+      "package_dependencies_react_apexcharts",
+      "package_dependencies_react_dom",
+      "package_dependencies_react_router_dom",
+      "package_dependencies_supabase_supabase_js",
+      "package_devdependencies",
+      "package_devdependencies_oxlint",
+      "package_devdependencies_types_node",
+      "package_devdependencies_types_react",
+      "package_devdependencies_types_react_dom",
+      "package_devdependencies_typescript",
+      "package_devdependencies_vite",
+      "package_devdependencies_vitejs_plugin_react",
+      "package_name",
+      "package_private",
+      "package_scripts",
+      "package_scripts_build",
+      "package_scripts_dev",
+      "package_scripts_firmware_check",
+      "package_scripts_firmware_configure",
+      "package_scripts_lint",
+      "package_scripts_preview",
+      "package_type",
+      "package_version",
+      "ref_apexcharts",
+      "ref_oxlint",
+      "ref_react_apexcharts",
+      "ref_supabase_supabase_js",
+      "ref_types_node",
+      "ref_types_react",
+      "ref_types_react_dom",
+      "ref_typescript",
+      "ref_vite",
+      "ref_vitejs_plugin_react",
+      "vite_config"
+    ],
+    "3": [
+      "src_components_esp32pinstatusmodal",
+      "src_components_esp32pinstatusmodal_allesp32pins",
+      "src_components_esp32pinstatusmodal_esp32pinstatusmodal",
+      "src_components_esp32pinstatusmodal_esp32pinstatusmodalprops",
+      "src_components_esp32pinstatusmodal_pindevice",
+      "src_components_esp32pinstatusmodal_pindeviceassignment",
+      "src_components_esp32pinstatusmodal_pinstatus",
+      "src_components_esp32pinstatusmodal_prioritypinlabels",
+      "src_components_switch",
+      "src_components_switch_switch",
+      "src_components_switch_switchprops",
+      "src_utils_helpers_parsenumber",
+      "src_views_settingsview",
+      "src_views_settingsview_machinesettings",
+      "src_views_settingsview_profile",
+      "src_views_settingsview_settingsview",
+      "src_views_settingsview_settingsview_loadall",
+      "src_views_settingsview_settingsview_loadprofile",
+      "src_views_settingsview_settingsview_loadsettings",
+      "src_views_settingsview_settingsview_loadslots",
+      "src_views_settingsview_settingsview_savemachinesettings",
+      "src_views_settingsview_settingsview_saveproduct",
+      "src_views_settingsview_settingsview_saveprofile",
+      "src_views_settingsview_settingsview_updatepinconnectiondetection",
+      "src_views_settingsview_slot"
+    ],
+    "4": [
+      "ref_node_assert",
+      "ref_node_child_process",
+      "ref_node_fs",
+      "ref_node_path",
+      "scripts_build_one_time_supabase_setup",
+      "scripts_build_one_time_supabase_setup_files",
+      "scripts_build_one_time_supabase_setup_migrations",
+      "scripts_build_one_time_supabase_setup_output",
+      "scripts_build_one_time_supabase_setup_sql",
+      "scripts_export_legacy_mysql_to_supabase",
+      "scripts_export_legacy_mysql_to_supabase_output",
+      "scripts_export_legacy_mysql_to_supabase_query",
+      "scripts_export_legacy_mysql_to_supabase_sqlvalue",
+      "scripts_export_legacy_mysql_to_supabase_tables",
+      "scripts_firmware_check",
+      "scripts_firmware_check_request",
+      "scripts_firmware_check_values",
+      "scripts_firmware_configure",
+      "scripts_firmware_configure_env",
+      "scripts_firmware_configure_previousvalue",
+      "scripts_firmware_configure_root",
+      "scripts_firmware_configure_target",
+      "scripts_firmware_configure_values"
+    ],
+    "5": [
+      "ref_react_dom",
+      "ref_react_router_dom",
+      "src_app",
+      "src_app_app",
+      "src_components_authguard",
+      "src_components_authguard_authguard",
+      "src_components_notificationsound",
+      "src_components_notificationsound_notificationsound",
+      "src_components_toast_toastprovider",
+      "src_hooks_useauth",
+      "src_hooks_useauth_adminuser",
+      "src_hooks_useauth_authcontext",
+      "src_hooks_useauth_authctx",
+      "src_hooks_useauth_authprovider",
+      "src_hooks_useauth_authprovider_loadprofile",
+      "src_hooks_useauth_useauth",
+      "src_index",
+      "src_main",
+      "src_pages_loginpage",
+      "src_pages_loginpage_loginpage"
+    ],
+    "6": [
+      "tsconfig_app",
+      "tsconfig_app_compileroptions",
+      "tsconfig_app_compileroptions_allowarbitraryextensions",
+      "tsconfig_app_compileroptions_allowimportingtsextensions",
+      "tsconfig_app_compileroptions_erasablesyntaxonly",
+      "tsconfig_app_compileroptions_jsx",
+      "tsconfig_app_compileroptions_lib",
+      "tsconfig_app_compileroptions_module",
+      "tsconfig_app_compileroptions_moduledetection",
+      "tsconfig_app_compileroptions_moduleresolution",
+      "tsconfig_app_compileroptions_noemit",
+      "tsconfig_app_compileroptions_nofallthroughcasesinswitch",
+      "tsconfig_app_compileroptions_nounusedlocals",
+      "tsconfig_app_compileroptions_nounusedparameters",
+      "tsconfig_app_compileroptions_skiplibcheck",
+      "tsconfig_app_compileroptions_target",
+      "tsconfig_app_compileroptions_tsbuildinfofile",
+      "tsconfig_app_compileroptions_types",
+      "tsconfig_app_compileroptions_verbatimmodulesyntax",
+      "tsconfig_app_include"
+    ],
+    "7": [
+      "tsconfig_node",
+      "tsconfig_node_compileroptions",
+      "tsconfig_node_compileroptions_allowimportingtsextensions",
+      "tsconfig_node_compileroptions_erasablesyntaxonly",
+      "tsconfig_node_compileroptions_lib",
+      "tsconfig_node_compileroptions_module",
+      "tsconfig_node_compileroptions_moduledetection",
+      "tsconfig_node_compileroptions_noemit",
+      "tsconfig_node_compileroptions_nofallthroughcasesinswitch",
+      "tsconfig_node_compileroptions_nounusedlocals",
+      "tsconfig_node_compileroptions_nounusedparameters",
+      "tsconfig_node_compileroptions_skiplibcheck",
+      "tsconfig_node_compileroptions_target",
+      "tsconfig_node_compileroptions_tsbuildinfofile",
+      "tsconfig_node_compileroptions_types",
+      "tsconfig_node_compileroptions_verbatimmodulesyntax",
+      "tsconfig_node_include"
+    ],
+    "8": [
+      "src_utils_helpers_formatuptime",
+      "src_views_healthview",
+      "src_views_healthview_buildtemperaturetimeline",
+      "src_views_healthview_formatbytes",
+      "src_views_healthview_healthview",
+      "src_views_healthview_healthview_load",
+      "src_views_healthview_logentry",
+      "src_views_healthview_metric",
+      "src_views_healthview_minutestart",
+      "src_views_healthview_resourcesample",
+      "src_views_healthview_temperaturepoint",
+      "src_views_healthview_timelabel",
+      "src_views_healthview_tokib"
+    ],
+    "9": [
+      "pdo",
+      "php_version_includes_supabase_sync",
+      "php_version_includes_supabase_sync_call_supabase_rpc",
+      "php_version_includes_supabase_sync_closure_1",
+      "php_version_includes_supabase_sync_closure_2",
+      "php_version_includes_supabase_sync_closure_3",
+      "php_version_includes_supabase_sync_closure_4",
+      "php_version_includes_supabase_sync_fetch_supabase_rows",
+      "php_version_includes_supabase_sync_sync_supabase_to_mysql",
+      "php_version_includes_supabase_sync_write_supabase_rows"
+    ],
+    "10": [
+      "oxlintrc",
+      "oxlintrc_plugins",
+      "oxlintrc_rules",
+      "oxlintrc_rules_react_only_export_components",
+      "oxlintrc_rules_react_rules_of_hooks",
+      "oxlintrc_schema"
+    ],
+    "11": [
+      "src_components_sidebar",
+      "src_components_sidebar_navitems",
+      "src_components_sidebar_sidebarprops",
+      "src_components_sidebar_view"
+    ],
+    "12": [
+      "src_components_topbar",
+      "src_components_topbar_synctext",
+      "src_components_topbar_topbar",
+      "src_components_topbar_topbarprops"
+    ],
+    "13": [
+      "tsconfig",
+      "tsconfig_files",
+      "tsconfig_references"
+    ],
+    "14": [
+      "firmware_4peace_esp32_firmware_config",
+      "firmware_4peace_esp32_firmware_config_local"
+    ],
+    "15": [
+      "firmware_4peace_esp32_firmware_config_local_example"
+    ],
+    "16": [
+      "firmware_4peace_esp32_firmware_supabase_ca"
+    ],
+    "17": [
+      "php_version_api_settings_get"
+    ],
+    "18": [
+      "php_version_api_settings_save"
+    ],
+    "19": [
+      "php_version_index"
+    ]
+  },
+  "cohesion": {
+    "0": 0.08819875776397515,
+    "1": 0.10938775510204081,
+    "2": 0.05405405405405406,
+    "3": 0.12,
+    "4": 0.09881422924901186,
+    "5": 0.19473684210526315,
+    "6": 0.1,
+    "7": 0.11764705882352941,
+    "8": 0.24358974358974358,
+    "9": 0.2222222222222222,
+    "10": 0.3333333333333333,
+    "11": 0.5,
+    "12": 0.6666666666666666,
+    "13": 0.6666666666666666,
+    "14": 1.0,
+    "15": 1.0,
+    "16": 1.0,
+    "17": 1.0,
+    "18": 1.0,
+    "19": 1.0
+  },
+  "gods": [
+    {
+      "id": "php_version_assets_js_app_api",
+      "label": "api()",
+      "degree": 23
+    },
+    {
+      "id": "php_version_assets_js_app_toast",
+      "label": "toast()",
+      "degree": 22
+    },
+    {
+      "id": "ref_react",
+      "label": "react",
+      "degree": 19
+    },
+    {
+      "id": "src_hooks_usepolling_usepolling",
+      "label": "usePolling()",
+      "degree": 18
+    },
+    {
+      "id": "src_utils_helpers_timeago",
+      "label": "timeAgo()",
+      "degree": 18
+    },
+    {
+      "id": "tsconfig_app_compileroptions",
+      "label": "compilerOptions",
+      "degree": 18
+    },
+    {
+      "id": "src_components_toast_usetoast",
+      "label": "useToast()",
+      "degree": 17
+    },
+    {
+      "id": "src_hooks_userealtimerefresh_userealtimerefresh",
+      "label": "useRealtimeRefresh()",
+      "degree": 17
+    },
+    {
+      "id": "src_pages_dashboardpage_dashboardpage",
+      "label": "DashboardPage()",
+      "degree": 17
+    },
+    {
+      "id": "src_views_settingsview_settingsview",
+      "label": "SettingsView()",
+      "degree": 17
+    }
+  ],
+  "surprises": [
+    {
+      "source": "HealthView()",
+      "target": "useToast()",
+      "source_files": [
+        "src/views/HealthView.tsx",
+        "src/components/Toast.tsx"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "bridges separate communities"
+    },
+    {
+      "source": "SettingsView()",
+      "target": "useToast()",
+      "source_files": [
+        "src/views/SettingsView.tsx",
+        "src/components/Toast.tsx"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "bridges separate communities"
+    },
+    {
+      "source": "HealthView()",
+      "target": "usePolling()",
+      "source_files": [
+        "src/views/HealthView.tsx",
+        "src/hooks/usePolling.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "bridges separate communities"
+    },
+    {
+      "source": "HealthView()",
+      "target": "useRealtimeRefresh()",
+      "source_files": [
+        "src/views/HealthView.tsx",
+        "src/hooks/useRealtimeRefresh.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "bridges separate communities"
+    },
+    {
+      "source": "App()",
+      "target": "DashboardPage()",
+      "source_files": [
+        "src/App.tsx",
+        "src/pages/DashboardPage.tsx"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "bridges separate communities"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `react` connect `DashboardPage.tsx` to `package.json`, `SettingsView.tsx`, `App.tsx`, `HealthView.tsx`, `Sidebar.tsx`?",
+      "why": "High betweenness centrality (0.087) - this node is a cross-community bridge."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `oxlint`, `@types/node`, `@types/react` to the rest of the system?",
+      "why": "5 weakly-connected nodes found - possible documentation gaps or missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `DashboardPage.tsx` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.08819875776397515 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `SettingsView()` connect `SettingsView.tsx` to `DashboardPage.tsx`, `App.tsx`?",
+      "why": "High betweenness centrality (0.031) - this node is a cross-community bridge."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `app.js` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.10938775510204081 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `package.json` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.05405405405405406 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `SettingsView.tsx` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.12 - nodes in this community are weakly interconnected."
+    }
+  ]
+}

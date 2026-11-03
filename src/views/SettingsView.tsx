@@ -17,9 +17,11 @@ interface MachineSettings {
   auto_reset_coin_count: boolean;
   enable_pin_connection_detection: boolean;
   device_api_key: string;
+  wifi_ssid?: string | null;
+  wifi_password?: string | null;
 }
 interface Profile {
-  id: number;
+  id: string;
   full_name: string;
   username: string;
   email: string;
@@ -46,6 +48,9 @@ export default function SettingsView() {
   const [autoReset, setAutoReset] = useState(false);
   const [pinConnectionDetection, setPinConnectionDetectionEnabled] = useState(false);
   const [deviceKey, setDeviceKey] = useState('');
+  const [wifiSsid, setWifiSsid] = useState('');
+  const [wifiPassword, setWifiPassword] = useState('');
+  const [wifiPasswordSet, setWifiPasswordSet] = useState(false);
 
   // Profile
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -90,17 +95,14 @@ export default function SettingsView() {
       setAutoReset(!!data.auto_reset_coin_count);
       setPinConnectionDetectionEnabled(!!data.enable_pin_connection_detection);
       setDeviceKey(data.device_api_key ?? '');
+      setWifiSsid(data.wifi_ssid ?? '');
+      setWifiPassword('');
+      setWifiPasswordSet(!!data.wifi_password);
     }
   }
 
   async function loadProfile() {
-    let query = supabase.from('admins').select('*');
-    if (admin?.id) {
-      query = query.eq('id', admin.id);
-    } else if (admin?.username) {
-      query = query.eq('username', admin.username);
-    }
-    const { data } = await query.limit(1).maybeSingle();
+    const { data } = await supabase.from('profiles').select('*').eq('id', admin?.id ?? '').maybeSingle();
     if (data) {
       setProfile(data);
       setProfFullName(data.full_name ?? '');
@@ -124,18 +126,25 @@ export default function SettingsView() {
 
   async function saveMachineSettings() {
     if (!ms) return;
+    if (wifiSsid.length > 32 || wifiPassword.length > 63) {
+      showToast('Wi-Fi name must be 32 characters or fewer and password 63 or fewer.', true);
+      return;
+    }
+    const updates: Record<string, unknown> = {
+      unit_price: parseNumber(unitPrice),
+      low_stock_threshold: parseNumber(lowStock),
+      coin_box_alert_pct: parseNumber(coinAlert),
+      admin_sms_number: smsNumber.trim(),
+      tamper_alarm_enabled: tamper,
+      auto_reset_coin_count: autoReset,
+      enable_pin_connection_detection: pinConnectionDetection,
+      device_api_key: deviceKey.trim(),
+      wifi_ssid: wifiSsid.trim() || null,
+    };
+    if (wifiPassword) updates.wifi_password = wifiPassword;
     const { error } = await supabase
       .from('machine_settings')
-      .update({
-        unit_price: parseNumber(unitPrice),
-        low_stock_threshold: parseNumber(lowStock),
-        coin_box_alert_pct: parseNumber(coinAlert),
-        admin_sms_number: smsNumber.trim(),
-        tamper_alarm_enabled: tamper,
-        auto_reset_coin_count: autoReset,
-        enable_pin_connection_detection: pinConnectionDetection,
-        device_api_key: deviceKey.trim(),
-      })
+      .update(updates)
       .eq('id', ms.id);
     if (error) { showToast('Could not save settings.', true); return; }
     showToast('Machine settings saved.');
@@ -163,19 +172,23 @@ export default function SettingsView() {
 
   async function saveProfile() {
     if (!profile) return;
-    const updates: Record<string, unknown> = {
+    const updates = {
       full_name: profFullName.trim(),
       username: profUsername.trim(),
-      email: profEmail.trim(),
       phone: profPhone.trim(),
     };
 
     if (profPassword.trim()) {
-      updates.password_hash = profPassword.trim();
+      const { error } = await supabase.auth.updateUser({ password: profPassword.trim() });
+      if (error) { showToast('Could not update password.', true); return; }
+    }
+    if (profEmail.trim() !== admin?.email) {
+      const { error } = await supabase.auth.updateUser({ email: profEmail.trim() });
+      if (error) { showToast('Could not update email.', true); return; }
     }
 
     const { error } = await supabase
-      .from('admins')
+      .from('profiles')
       .update(updates)
       .eq('id', profile.id);
 
@@ -292,17 +305,17 @@ export default function SettingsView() {
         </div>
         <div className="settings-grid">
           {([
-            ['Unit price', 'Fixed price per dispense, all slots', unitPrice, setUnitPrice],
-            ['Low-stock threshold', 'Triggers SMS alert via SIM800L', lowStock, setLowStock],
-            ['Coin box alert level', 'Admin gets notified past this fill %', coinAlert, setCoinAlert],
-            ['Admin SMS number', 'Receives GSM alerts from the unit', smsNumber, setSmsNumber],
-          ] as [string, string, string, (v: string) => void][]).map(([label, hint, val, setter]) => (
+            ['Unit price', 'Fixed price per dispense, all slots', unitPrice, setUnitPrice, 160],
+            ['Low-stock threshold', 'Triggers SMS alert via SIM800L', lowStock, setLowStock, 160],
+            ['Coin box alert level', 'Admin gets notified past this fill %', coinAlert, setCoinAlert, 160],
+            ['Admin SMS number', 'Receives GSM alerts from the unit', smsNumber, setSmsNumber, 220],
+          ] as [string, string, string, (v: string) => void, number][]).map(([label, hint, val, setter, width]) => (
             <div className="field-row" key={label}>
               <div>
                 <div className="field-label">{label}</div>
                 <div className="field-hint">{hint}</div>
               </div>
-              <input className="input" style={{ maxWidth: 220 }} value={val} onChange={e => setter(e.target.value)} />
+              <input className="input" style={{ maxWidth: width }} value={val} onChange={e => setter(e.target.value)} />
             </div>
           ))}
 
@@ -336,6 +349,22 @@ export default function SettingsView() {
               <div className="field-hint">ESP32 sends this on gcash_verify / gcash_status</div>
             </div>
             <input className="input mono" style={{ maxWidth: 280 }} value={deviceKey} onChange={e => setDeviceKey(e.target.value)} />
+          </div>
+
+          <div className="field-row">
+            <div>
+              <div className="field-label">Machine Wi-Fi name (SSID)</div>
+              <div className="field-hint">The ESP32 switches to this network after its default firmware Wi-Fi.</div>
+            </div>
+            <input className="input" style={{ maxWidth: 280 }} maxLength={32} placeholder="Wi-Fi name" autoComplete="off" value={wifiSsid} onChange={e => setWifiSsid(e.target.value)} />
+          </div>
+
+          <div className="field-row">
+            <div>
+              <div className="field-label">Machine Wi-Fi password</div>
+              <div className="field-hint">Leave blank to keep the current password. The ESP32 stores it locally after download.</div>
+            </div>
+            <input className="input" type="password" style={{ maxWidth: 280 }} maxLength={63} placeholder={wifiPasswordSet ? 'Leave blank to keep current password' : 'Enter Wi-Fi password'} autoComplete="new-password" value={wifiPassword} onChange={e => setWifiPassword(e.target.value)} />
           </div>
         </div>
       </div>
