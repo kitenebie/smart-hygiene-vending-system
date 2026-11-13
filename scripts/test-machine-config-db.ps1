@@ -60,7 +60,10 @@ CREATE TABLE public.machine_settings (
   credit_reset_token bigint NOT NULL DEFAULT 0,
   enable_pin_connection_detection boolean NOT NULL DEFAULT false,
   device_api_key text NOT NULL,
-  wifi_password text
+  wifi_password text,
+  coin_box_alert_pct integer NOT NULL DEFAULT 80,
+  auto_reset_coin_count boolean NOT NULL DEFAULT false,
+  wifi_ssid text
 );
 ALTER TABLE public.machine_settings DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON TABLE public.machine_settings TO anon, authenticated;
@@ -68,12 +71,14 @@ INSERT INTO public.profiles VALUES
   ('11111111-1111-4111-8111-111111111111', 'Administrator'),
   ('22222222-2222-4222-8222-222222222222', 'Machine Technician');
 INSERT INTO public.machine_settings VALUES
-  (1, 14.5, 6, '+639000000000', true, 9, true, 'test-device-key', 'private-wifi-password');
+  (1, 14.5, 6, '+639000000000', true, 9, true, 'test-device-key', 'private-wifi-password', 80, false, 'machine-wifi');
 '@ | Set-Content -LiteralPath $fixturePath -Encoding utf8
   & $psql @pgArgs -f $fixturePath | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Fixture setup failed' }
 
   $repoRoot = Split-Path -Parent $PSScriptRoot
+  & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\migrations\20261113006500_safe_settings_read_rpc.sql') | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Safe settings read RPC migration failed' }
   & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\deferred_migrations\20261113007000_machine_settings_device_rpc.sql') | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Machine settings hardening migration failed' }
 
@@ -89,6 +94,33 @@ DO $$ DECLARE result jsonb; BEGIN
   result := public.get_machine_config('wrong-key');
   IF result->>'success' <> 'false' THEN RAISE EXCEPTION 'wrong device key accepted'; END IF;
 END $$;
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+DO $$ DECLARE result jsonb; BEGIN
+  result := public.get_machine_settings_for_profile();
+  IF result->>'id' <> '1' OR result->>'wifi_password_set' <> 'true' THEN RAISE EXCEPTION 'safe settings RPC omitted expected settings metadata: %', result; END IF;
+  IF result ? 'wifi_password' OR result::text LIKE '%private-wifi-password%' THEN RAISE EXCEPTION 'safe settings RPC exposed the Wi-Fi password'; END IF;
+END $$;
+ROLLBACK;
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '22222222-2222-4222-8222-222222222222';
+DO $$ DECLARE result jsonb; BEGIN
+  result := public.get_machine_settings_for_profile();
+  IF result->>'wifi_password_set' <> 'true' OR result ? 'wifi_password' THEN RAISE EXCEPTION 'technician settings response is incorrect: %', result; END IF;
+END $$;
+ROLLBACK;
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '33333333-3333-4333-8333-333333333333';
+DO $$ BEGIN
+  BEGIN PERFORM public.get_machine_settings_for_profile();
+    RAISE EXCEPTION 'unprofiled settings RPC unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END $$;
+ROLLBACK;
 BEGIN;
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
@@ -110,6 +142,15 @@ ROLLBACK;
 BEGIN;
 SET LOCAL ROLE anon;
 DO $$ BEGIN
+  BEGIN PERFORM public.get_machine_settings_for_profile();
+    RAISE EXCEPTION 'anon settings RPC unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END $$;
+ROLLBACK;
+BEGIN;
+SET LOCAL ROLE anon;
+DO $$ BEGIN
   BEGIN PERFORM device_api_key FROM public.machine_settings;
     RAISE EXCEPTION 'anon read unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
@@ -123,7 +164,7 @@ ROLLBACK;
 '@ | Set-Content -LiteralPath $testPath -Encoding utf8
   & $psql @pgArgs -f $testPath
   if ($LASTEXITCODE -ne 0) { throw 'Machine config access assertions failed' }
-  'PASS: anon cannot read/update machine settings; authenticated profiles can read/update; device RPC validates key and omits key/password fields.'
+  'PASS: authenticated settings RPC omits Wi-Fi password; anon cannot call settings/device RPCs or access the table; device RPC validates key; profile access works.'
 }
 finally {
   if ($started) {

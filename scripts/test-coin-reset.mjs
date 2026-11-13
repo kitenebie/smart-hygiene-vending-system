@@ -60,6 +60,9 @@ assert.match(profileCreation, /INSERT INTO public\.profiles \(id, username, full
 assert.match(helper, /rpc\('request_coin_balance_reset'\)/);
 assert.match(health, /admin\?\.role === 'Administrator'/);
 assert.match(settings, /admin\?\.role === 'Administrator'/);
+assert.match(settings, /device_api_key: deviceKey\.trim\(\) \|\| ms\.device_api_key/);
+assert.match(settings, /supabase\.rpc\('get_machine_settings_for_profile'\)/);
+assert.doesNotMatch(settings, /\.from\('machine_settings'\)\s*\.select\('\*'\)/);
 assert.match(firmware, /requestedCreditReset > handledCreditReset/);
 assert.match(firmware, /currentCredit = 0\.0f/);
 assert.match(firmware, /persistCurrentCredit\(\)/);

@@ -11,7 +11,7 @@ The current source is `Php_Version/4peace_db.sql`, a 2026-11-12 phpMyAdmin dump 
 | `device_health` | `device_health` | Overview and health |
 | `device_resource_logs` | `device_resource_logs` | Health telemetry charts |
 | `machine_health_logs` | `machine_health_logs` | Health timeline; candidate profile-read and device-key firmware-write policies are locally tested but deferred. |
-| `machine_settings` | `machine_settings` | Settings and firmware; dump contains Wi-Fi fields and new `credit_reset_token` |
+| `machine_settings` | `machine_settings` | React settings reads use authenticated `get_machine_settings_for_profile`; it returns `wifi_password_set` without sending the Wi-Fi password. Firmware keeps its existing direct REST contract; device RPC/RLS hardening remains deferred. |
 | `notifications` | `notifications` | Badge, alert list, mark-read; candidate profile RLS and device-key firmware writes are locally tested but deferred. |
 | `sms` | `sms` | SMS delivery logs |
 | `esp32_logs` | `esp32_logs` | ESP32 log view and latest-credit parsing |
@@ -27,4 +27,4 @@ The current source is `Php_Version/4peace_db.sql`, a 2026-11-12 phpMyAdmin dump 
 - `machine_settings.wifi_password`
 - `machine_settings.credit_reset_token BIGINT NOT NULL DEFAULT 0` (range-preserving conversion for the legacy integer token)
 
-The additive schema migration is `20261113000000_legacy_schema_delta.sql`; the reset RPC is `20261113001000_coin_balance_reset_rpc.sql`. Device-security candidates `20261113007000`–`20261113010000` live under `supabase/deferred_migrations/` and are excluded from `ONE_TIME_SETUP.sql`; they need a compatible firmware rollout before deployment. The generated standard bundle still disables RLS on `slots`, `transactions`, `machine_health_logs`, `machine_settings`, `gcash_payments`, `notifications`, and `sms`, so it is not production-ready. The consolidated SQL excludes demo seeds and the superseded Nov 3 import. Data inserts use `ON CONFLICT DO NOTHING`: they preserve existing Supabase rows, so matching legacy IDs are not overwritten.
+The additive schema migrations are `20261113000000_legacy_schema_delta.sql` and `20261113006500_safe_settings_read_rpc.sql`; the reset RPC is `20261113001000_coin_balance_reset_rpc.sql`. Device-security candidates `20261113007000`–`20261113010000` live under `supabase/deferred_migrations/` and are excluded from `ONE_TIME_SETUP.sql`; they need a compatible firmware rollout before deployment. The generated standard bundle still disables RLS on `slots`, `transactions`, `machine_health_logs`, `machine_settings`, `gcash_payments`, `notifications`, and `sms`, so it is not production-ready. The consolidated SQL excludes demo seeds and the superseded Nov 3 import. Data inserts use `ON CONFLICT DO NOTHING`: they preserve existing Supabase rows, so matching legacy IDs are not overwritten.

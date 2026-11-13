@@ -19,7 +19,7 @@ interface MachineSettings {
   enable_pin_connection_detection: boolean;
   device_api_key: string;
   wifi_ssid?: string | null;
-  wifi_password?: string | null;
+  wifi_password_set: boolean;
 }
 interface Profile {
   id: string;
@@ -105,12 +105,8 @@ export default function SettingsView() {
   }
 
   async function loadSettings() {
-    const { data } = await supabase
-      .from('machine_settings')
-      .select('*')
-      .order('id', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { data, error } = await supabase.rpc('get_machine_settings_for_profile');
+    if (error) { showToast('Could not load machine settings.', true); return; }
     if (data) {
       setMs(data);
       setUnitPrice('₱' + Number(data.unit_price).toFixed(2));
@@ -123,7 +119,7 @@ export default function SettingsView() {
       setDeviceKey(data.device_api_key ?? '');
       setWifiSsid(data.wifi_ssid ?? '');
       setWifiPassword('');
-      setWifiPasswordSet(!!data.wifi_password);
+      setWifiPasswordSet(!!data.wifi_password_set);
     }
   }
 
@@ -164,7 +160,7 @@ export default function SettingsView() {
       tamper_alarm_enabled: tamper,
       auto_reset_coin_count: autoReset,
       enable_pin_connection_detection: pinConnectionDetection,
-      device_api_key: deviceKey.trim(),
+      device_api_key: deviceKey.trim() || ms.device_api_key,
       wifi_ssid: wifiSsid.trim() || null,
     };
     if (wifiPassword) updates.wifi_password = wifiPassword;
