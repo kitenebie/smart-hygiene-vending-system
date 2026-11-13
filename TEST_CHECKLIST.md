@@ -7,17 +7,20 @@
 - [x] Regenerated `ONE_TIME_SETUP.sql`; confirmed it excludes demo seeds and the superseded Nov 3 import and contains no `DROP TABLE` or `TRUNCATE TABLE` statements. Imports use `ON CONFLICT DO NOTHING`.
 - [x] `npm run build` — passed again (TypeScript and Vite; 98 modules). Main JS bundle is 1,472.33 kB (419.82 kB gzip), above Vite's 500 kB warning threshold.
 - [x] Direct Oxlint run — 0 errors, 5 warnings. Warnings are in dashboard/auth/toast code, the Settings effect dependency, and legacy PHP JS. The `npm run lint` wrapper returned an output-parser error; direct Oxlint gave its normal result.
-- [x] `npm run test:coin-reset` — passed PHP/React regex parity, PHP-dump-shaped credit messages, latest-log query ordering, admin-only UI/RPC checks, database locking, notification creation, firmware token persistence, and checks that the one-file setup includes the reset column/RPC without destructive SQL.
+- [x] `npm run test:coin-reset` — passed PHP/React regex parity, PHP-dump-shaped credit messages, latest-log query ordering, admin-only UI/RPC checks, database locking, notification creation, firmware token persistence and protected config-RPC wiring, plus setup SQL safety checks.
 - [x] `npm run test:coin-reset-db` — disposable PostgreSQL integration passed: admin reset incremented token 7→8 and created one notification; technician and anon calls were denied and left token/notification state unchanged.
 - [x] `npm run test:restock-db` — disposable PostgreSQL integration applied the legacy anon grant then the new guard; admin/technician restocks passed, capacity/invalid/missing-slot checks passed, and anon/unprofiled users were denied without stock changes.
 - [x] `npm run test:pin-rpc-db` — disposable PostgreSQL integration applied the legacy anon grants then the new guards; authenticated catalog creation/assignment and input validation passed, anon/unprofiled calls were denied, and denied calls made no writes.
+- [x] `npm run test:operational-reads-db` — disposable PostgreSQL integration replaced legacy anonymous table grants with RLS: profiled authenticated users can read seven telemetry/PIN tables; anon and unprofiled users cannot; direct writes are revoked.
+- [x] `npm run test:machine-config-db` — disposable PostgreSQL integration denies anon table reads/updates, allows profiled settings access, blocks unprofiled access, and verifies the device-key RPC returns config without the device key or Wi-Fi password.
+- [x] `npm run test:machine-slots-db` — disposable PostgreSQL integration verifies the device-key RPC returns five safe slot rows, anon/unprofiled table reads fail, authenticated users can edit product/capacity, and direct stock changes are denied.
 - [x] `npm run test:profile-role-boundary` — disposable PostgreSQL test passed: new Auth profiles default to `Machine Technician`, self-promotion is denied even after seeding a legacy column-level `role` grant, allowed profile edits still work, and existing roles are preserved.
 - [x] Settings PHP/React source parity review — both pages include product/slot editing, admin profile, last-login/role display, machine settings, Wi-Fi, PIN detection, and coin reset; React handlers are wired to Supabase. This is structural review only, not an authenticated-save or pixel-level visual test.
 - [x] Settings profile email source audit — `profiles` has no email column, so React now loads the field from the authenticated Supabase user context. Build passed after the fix; actual authenticated email change/confirmation remains unverified.
 - [x] Dev-server check — after setting Vite's default to `127.0.0.1:4173`, the exact `npm run dev` command started successfully and `/`, `/login`, and `/?view=health` returned HTTP 200. The previous default port 5173 had failed with `EACCES`.
 - [x] `npm run firmware:check` — live schema endpoints responded, but `complete_vend` rejected the configured test device key (`invalid device key`) before the expected nonexistent-slot check; no sale was created. The later telemetry and pin RPC probes did not run after the assertion failed.
 - [x] Applied the schema delta and reset RPC to a disposable local PostgreSQL 17 database. Admin incremented the token and created a notification; technician and `anon` calls were denied; rejected calls did not change token/notification state.
-- [x] Applied the complete `ONE_TIME_SETUP.sql` to a fresh disposable PostgreSQL 17 database with minimal Supabase Auth and Realtime fixtures; all 15 imported table counts, boolean schema, and reset token value matched expectations.
+- [x] Applied the prior `ONE_TIME_SETUP.sql` bundle to a fresh disposable PostgreSQL 17 database with minimal Supabase Auth and Realtime fixtures; all 15 imported table counts, boolean schema, and reset token value matched expectations. The newly appended 070 machine-settings migration was tested separately against disposable PostgreSQL.
 - [x] Playwright local browser rerun — `/login` rendered; email is required and `type=email`; malformed email returned `typeMismatch=true` and Enter did not submit; unauthenticated `/?view=health` redirected to `/login`; 0 browser errors/warnings.
 - [x] Live domain `https://4peacesystem.earms.site/` — HTTP 200; root redirects to `/login`; deployed JS asset is byte-for-byte/SHA-256 identical to local build (1,472,337 bytes) and contains the reset button and `request_coin_balance_reset` call.
 - [x] Live-domain Playwright — email/password required, malformed email returned `typeMismatch=true` and did not submit, `/?view=health` redirected to `/login`, and browser reported 0 errors/warnings.
@@ -26,8 +29,11 @@
 - [x] Live schema recheck via the deployed app's Supabase URL — `machine_settings.credit_reset_token` and `gcash_payments.Notes` now both return HTTP 200 for `select=<column>&limit=0`. No rows were fetched; migration provenance and imported row counts remain unverified. A previous check returned `42703`.
 - [x] Live reset RPC authorization probe — anonymous POST returned HTTP 401 / PostgreSQL `42501`; no successful reset was requested.
 - [x] Read-only Supabase Auth settings probe — HTTP 200 reports public signup enabled. No signup was created; whether the role-hardening migration is active remotely could not be confirmed.
-- [x] Anonymous table-access probe (`select=*&limit=0`) — `slots`, `transactions`, `device_health`, `machine_health_logs`, `machine_settings`, `gcash_payments`, `notifications`, `sms`, `esp32_logs`, `device_resource_logs`, `esp32_pin_status`, `esp32_pin_devices`, `esp32_pin_device_assignments`, `supabase_sync_state`, and `esp32_device_presence` returned HTTP 200. `admins` returned 401 and `profiles` was row-filtered. No row data was requested; legacy migrations disable RLS on several of these tables.
-- [x] Firmware permission dependency audit — firmware uses its publishable/anon key for direct `machine_settings`/`slots`/`sms` reads, GCash payment operations, health/notification/SMS writes, and several RPCs. Those calls must be preserved behind device-key-validated RPCs (or equivalent trusted access) before restrictive RLS is enabled; a blanket RLS change would break device workflows.
+- [x] Anonymous table-access probe before local 070/080 hardening (`select=*&limit=0`) — `slots`, `transactions`, `device_health`, `machine_health_logs`, `machine_settings`, `gcash_payments`, `notifications`, `sms`, `esp32_logs`, `device_resource_logs`, `esp32_pin_status`, `esp32_pin_devices`, `esp32_pin_device_assignments`, `supabase_sync_state`, and `esp32_device_presence` returned HTTP 200. `admins` returned 401 and `profiles` was row-filtered. No row data was requested; remote migration state remains unverified.
+- [x] Firmware access audit — machine configuration and slot reads now use device-key-checked RPCs; local firmware configuration no longer fetches the key through anon access. SMS reads, GCash operations, health/notification/SMS writes, and other device calls still need review before their table policies can be tightened.
+- [x] `npm run build` after the machine-config RPC change — passed TypeScript and Vite build (98 modules); Vite still reports the existing 1,472.33 kB main bundle warning.
+- [x] `npm run dev` reuse check — existing Vite server on `127.0.0.1:4173` returned HTTP 200.
+- [x] `git diff --check` — passed after migration, firmware, tool, and documentation updates.
 
 ## Not tested or blocked
 
@@ -39,7 +45,7 @@
 - [ ] Login backend parity — current React login uses Supabase Auth/`profiles`, while the user's instruction requested the legacy `admins` table. That requested path is not implemented or tested; legacy password hashes cannot be copied into Auth as passwords.
 - [ ] Firmware end-to-end — `npm run firmware:check` reached the live project but rejected the configured test device key at the vend RPC check; it did not create a sale. Arduino compiler and physical machine were unavailable.
 - [ ] PHP/React visual comparison — blocked because PHP runtime dependencies `includes/auth_check.php`, `config/db.php`, and `logout.php` are missing.
-- [ ] Full module/role/RLS verification — not complete. Anonymous requests can query exposed table schemas, public Auth signup is enabled, and legacy migrations disable RLS on app tables. Actual row data was not fetched. Verify the role-boundary migration and review grants; move firmware direct REST writes behind device-key-validated RPCs before enabling restrictive RLS. The setup file remains development/staging only until policies are implemented and verified.
+- [ ] Full module/role/RLS verification — not complete. Anonymous requests previously confirmed exposed table schemas, public Auth signup is enabled, and several legacy tables remain open. Actual row data was not fetched. Review remaining device operations and apply/verify all policies in staging; the setup file remains development/staging only until that work is complete.
 
 ## Module-by-module coverage
 
@@ -47,13 +53,13 @@
 |---|---|---|
 | Login/Auth | Local + live-domain required email/password fields, malformed-email browser validation, unauthenticated redirect, and local PostgreSQL role-boundary regression | Resolve `admins` table vs Supabase Auth requirement; then test real sign-in, logout, password update/reset, existing-role audit, and live role-based access |
 | Overview/Dashboard | TypeScript/Vite build | Authenticated live totals, filters, realtime refresh, and role permissions |
-| Slots/Inventory | Disposable PostgreSQL RPC test; React validation source review; TypeScript/Vite build | Authenticated live restock and live data refresh |
+| Slots/Inventory | Disposable PostgreSQL restock and device-read RPC/RLS tests; React validation and build | Authenticated live restock and live data refresh; physical firmware verification |
 | Transactions/GCash | TypeScript/Vite build | Approve/reject, notification side effects, search/filter, and CSV export against staging |
-| Device Health/Coin reset | Live bundle contains reset UI/RPC call; live schema recognizes reset column; anonymous RPC is denied; parser/helper checks, local PostgreSQL RPC and profile-role tests, firmware token persistence static check, and live read-only reported balance | Authenticated admin UI confirmation flow, successful live admin RPC, existing role audit, firmware acknowledgement on hardware |
+| Device Health/Coin reset | Live bundle contains reset UI/RPC call; live schema recognizes reset column; anonymous reset RPC is denied; local reset/RLS tests pass; firmware token persistence is statically checked | Authenticated admin UI confirmation flow, successful live admin RPC, live RLS migration, firmware compiler/hardware acknowledgement |
 | Notifications | TypeScript/Vite build | Mark-read/all-read, unread count, realtime refresh, and permission checks |
 | SMS Logs | TypeScript/Vite build | Search/filter/pagination and live SMS data access |
-| ESP32 Logs | TypeScript/Vite build | Filters, pagination, live query permissions, and realtime behavior |
-| Settings/Profile/PIN diagnostics | PHP/React source structure comparison; disposable PostgreSQL PIN RPC test; TypeScript/Vite build | Authenticated profile/machine saves, password/email confirmation, live PIN UI actions, and pixel-level visual parity |
+| ESP32 Logs | Disposable PostgreSQL authenticated-read RLS test; TypeScript/Vite build | Live RLS rollout, filters, pagination, and realtime behavior |
+| Settings/Profile/PIN diagnostics | PHP/React source structure comparison; disposable PostgreSQL PIN and machine-settings RLS/RPC tests; TypeScript/Vite build | Authenticated profile/machine saves, password/email confirmation, live PIN UI actions, and pixel-level visual parity |
 | CSV export | TypeScript/Vite build | Exported rows, formatting, and filtering parity |
 
 The build confirms these modules compile; it does not count as an end-to-end module test. No authenticated React test session was confirmed for the pending checks.
@@ -67,7 +73,7 @@ The build confirms these modules compile; it does not count as an end-to-end mod
 - [x] PHP inventory, database mapping, route mapping, and module checklist exist; eight dashboard views have React counterparts and React Router is present.
 - [x] Supabase migration/data bundle is generated locally from the latest dump.
 - [ ] Apply and verify schema/data in authorized Supabase staging; direct API reads work, but linked CLI/SQL access returns HTTP 403.
-- [ ] Finish table-level RLS policies and verify role permissions; local RPC guards now cover reset/restock/PIN actions, but multiple legacy migrations leave app tables with RLS disabled and live migrations remain unverified.
+- [ ] Finish table-level RLS policies and verify role permissions; local guards now cover reset/restock/PIN RPCs, seven operational read tables, machine settings, and slots, but other legacy tables remain open and live migrations are unverified.
 - [ ] Resolve the requested `admins`-table login vs current Supabase Auth/`profiles` flow, then complete safe legacy account linking/reset. Imported PHP password hashes are not Supabase Auth credentials.
 - [ ] Verify every module end-to-end and compare the live PHP UI; 18 PHP API implementations and PHP auth/database files are missing.
 - [ ] Match the requested JavaScript/JSX stack; current React source is TypeScript/TSX.
@@ -76,9 +82,9 @@ The build confirms these modules compile; it does not count as an end-to-end mod
 | Original phase | Status | Verification result |
 |---|---|---|
 | 1. PHP source audit | Partial | Existing files and missing APIs are inventoried; missing auth/database/API files prevent verifying their server rules. |
-| 2. Supabase schema/data | Partial | Full bundle passes locally; live API recognizes `credit_reset_token` and `Notes`, but import history/counts and RLS remain unverified. |
+| 2. Supabase schema/data | Partial | Prior full bundle and latest standalone 070 migration pass locally; live API recognizes `credit_reset_token` and `Notes`, but latest full bundle, import history/counts, and RLS remain unverified. |
 | 3. React frontend | Partial | Eight views and React Router exist; full module behavior and visual parity are not verified. Source is TSX, not requested JSX. |
-| 4. Supabase backend | Partial | Direct reads work; live API recognizes reset fields and denies anonymous RPC calls; successful admin RPC remains unverified. |
+| 4. Supabase backend | Partial | Local machine-config RPC validates the device key and excludes secrets; live RLS rollout, successful admin reset, and remaining device paths are unverified. |
 | 5. Auth/authorization | Partial | Local migration blocks new self-promotion; public signup is enabled, existing profile roles/live migration state are unverified, and the `admins` vs Auth login requirement is unresolved. |
 | 6. Module implementation | Partial | React equivalents are mapped; 18 PHP API implementations are missing and all CRUD paths are not end-to-end tested. |
 | 7. Project structure | Partial | Existing project structure is usable; the requested JavaScript/JSX conversion is not done. |

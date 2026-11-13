@@ -29,13 +29,13 @@ REQUIRED ARDUINO LIBRARIES
 
 BEFORE FLASHING
 ---------------
-1. Run npm run firmware:configure from react-app to synchronize backend credentials.
+1. Set FIRMWARE_DEVICE_API_KEY in the local .env from the authenticated machine settings page, then run npm run firmware:configure from react-app.
 2. Set WIFI_SSID and WIFI_PASSWORD in config.local.h (2.4 GHz network required).
 3. Keep config.local.h private; it is ignored by Git.
 4. Re-run firmware:configure after changing the backend device token.
 5. Set DEFAULT_ADMIN_SMS.
 6. Apply the Supabase migrations, including `20260911100000_sms_outbox.sql`.
-7. Make sure machine_settings.device_api_key has the SAME DEVICE_API_KEY.
+7. Make sure machine_settings.device_api_key matches FIRMWARE_DEVICE_API_KEY. The anon key cannot read this column.
 8. Confirm LCD address (0x27) and PCF8574 address (0x20) with an I2C scanner.
 9. Calibrate the coin acceptor pulse values.
 10. Confirm relay board is active LOW; if not, change RELAY_ACTIVE_LEVEL.
@@ -133,8 +133,9 @@ FUNCTIONAL TEST ORDER
 CONNECTION UPDATE (2026-09-10)
 ------------------------------
 - React and firmware use the same Supabase project. Credentials are in ignored
-  config.local.h; npm run firmware:configure refreshes the Supabase values and
-  preserves the Wi-Fi settings. Never share compiled binaries: they contain credentials.
+  config.local.h; npm run firmware:configure refreshes public Supabase values,
+  takes the device key from local .env or the existing config, and preserves Wi-Fi.
+  Never share compiled binaries: they contain credentials.
 - GCash approval only approves payment. The device complete_vend RPC records the
   transaction after an IR-confirmed drop, and consumed_at marks fulfillment.
 - Completion validates the device token and payment amount, serializes replay,

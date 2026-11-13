@@ -8159,3 +8159,175 @@ GRANT EXECUTE ON FUNCTION public.create_esp32_pin_device(text, text) TO authenti
 GRANT EXECUTE ON FUNCTION public.assign_esp32_pin_device(text, integer, bigint) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
+
+
+-- ===== 20261113006000_authenticated_operational_reads.sql =====
+
+-- Dashboard telemetry and PIN metadata are visible to signed-in app users only.
+
+REVOKE ALL ON TABLE
+  public.device_health,
+  public.device_resource_logs,
+  public.esp32_logs,
+  public.esp32_pin_status,
+  public.esp32_device_presence,
+  public.esp32_pin_devices,
+  public.esp32_pin_device_assignments
+FROM PUBLIC, anon, authenticated;
+
+GRANT SELECT ON TABLE
+  public.device_health,
+  public.device_resource_logs,
+  public.esp32_logs,
+  public.esp32_pin_status,
+  public.esp32_device_presence,
+  public.esp32_pin_devices,
+  public.esp32_pin_device_assignments
+TO authenticated;
+
+DO $$
+DECLARE
+  table_name text;
+  table_names text[] := ARRAY[
+    'device_health', 'device_resource_logs', 'esp32_logs', 'esp32_pin_status',
+    'esp32_device_presence', 'esp32_pin_devices', 'esp32_pin_device_assignments'
+  ];
+BEGIN
+  FOREACH table_name IN ARRAY table_names LOOP
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', table_name);
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'authenticated operational read', table_name);
+    EXECUTE format(
+      'CREATE POLICY %I ON public.%I FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN (''Administrator'', ''Machine Technician'')))',
+      'authenticated operational read', table_name
+    );
+  END LOOP;
+END;
+$$;
+
+NOTIFY pgrst, 'reload schema';
+
+
+-- ===== 20261113007000_machine_settings_device_rpc.sql =====
+
+ALTER TABLE public.machine_settings ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.machine_settings FROM PUBLIC, anon, authenticated;
+GRANT SELECT, UPDATE ON TABLE public.machine_settings TO authenticated;
+
+DROP POLICY IF EXISTS "machine settings: read profile" ON public.machine_settings;
+CREATE POLICY "machine settings: read profile"
+  ON public.machine_settings FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role IN ('Administrator', 'Machine Technician')
+  ));
+
+DROP POLICY IF EXISTS "machine settings: update profile" ON public.machine_settings;
+CREATE POLICY "machine settings: update profile"
+  ON public.machine_settings FOR UPDATE TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role IN ('Administrator', 'Machine Technician')
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role IN ('Administrator', 'Machine Technician')
+  ));
+
+CREATE OR REPLACE FUNCTION public.get_machine_config(p_device_key text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  settings_row public.machine_settings%ROWTYPE;
+BEGIN
+  SELECT * INTO settings_row
+  FROM public.machine_settings
+  ORDER BY id DESC
+  LIMIT 1;
+
+  IF NOT FOUND OR settings_row.device_api_key IS DISTINCT FROM p_device_key THEN
+    RETURN jsonb_build_object('success', false, 'message', 'invalid device key');
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'unit_price', settings_row.unit_price,
+    'low_stock_threshold', settings_row.low_stock_threshold,
+    'admin_sms_number', settings_row.admin_sms_number,
+    'tamper_alarm_enabled', settings_row.tamper_alarm_enabled,
+    'credit_reset_token', settings_row.credit_reset_token,
+    'enable_pin_connection_detection', settings_row.enable_pin_connection_detection
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_machine_config(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_machine_config(text) TO anon, authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+
+-- ===== 20261113008000_authenticated_slots_device_rpc.sql =====
+
+ALTER TABLE public.slots ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.slots FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.slots TO authenticated;
+GRANT UPDATE (product_name, capacity) ON TABLE public.slots TO authenticated;
+
+DROP POLICY IF EXISTS "slots: read profile" ON public.slots;
+CREATE POLICY "slots: read profile"
+  ON public.slots FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role IN ('Administrator', 'Machine Technician')
+  ));
+
+DROP POLICY IF EXISTS "slots: update product profile" ON public.slots;
+CREATE POLICY "slots: update product profile"
+  ON public.slots FOR UPDATE TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role IN ('Administrator', 'Machine Technician')
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role IN ('Administrator', 'Machine Technician')
+  ));
+
+CREATE OR REPLACE FUNCTION public.get_machine_slots(p_device_key text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  settings_row public.machine_settings%ROWTYPE;
+BEGIN
+  SELECT * INTO settings_row
+  FROM public.machine_settings
+  ORDER BY id DESC
+  LIMIT 1;
+
+  IF NOT FOUND OR settings_row.device_api_key IS DISTINCT FROM p_device_key THEN
+    RETURN '[]'::jsonb;
+  END IF;
+
+  RETURN COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'id', s.id,
+      'slot_code', s.slot_code,
+      'product_name', s.product_name,
+      'stock', s.stock,
+      'capacity', s.capacity
+    ) ORDER BY s.id)
+    FROM public.slots s
+  ), '[]'::jsonb);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_machine_slots(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_machine_slots(text) TO anon, authenticated;
+
+NOTIFY pgrst, 'reload schema';

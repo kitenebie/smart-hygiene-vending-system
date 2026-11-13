@@ -166,7 +166,7 @@ The database includes the primary operational tables below, plus telemetry, pres
 └─────────────────────────┘
 ```
 
-Additional device tables: `device_resource_logs` (minute-level resource and CPU telemetry), `esp32_device_presence` (last authenticated heartbeat), `esp32_logs` (server-timestamped firmware events), and `sms_messages` / `sms_outbox` (GSM message workflow). Device-facing RPCs authenticate the configured `machine_settings.device_api_key` before writing telemetry, heartbeats, pin status, dispense records, or logs.
+Additional device tables: `device_resource_logs` (minute-level resource and CPU telemetry), `esp32_device_presence` (last authenticated heartbeat), `esp32_logs` (server-timestamped firmware events), and `sms_messages` / `sms_outbox` (GSM message workflow). Device-facing RPCs authenticate `machine_settings.device_api_key` before returning machine configuration/slots or writing telemetry, heartbeats, pin status, dispense records, or logs.
 
 ---
 
@@ -383,7 +383,7 @@ Flash `firmware/4peace_esp32_firmware` and open Serial Monitor at **115200 baud*
 ## ❓ Troubleshooting & FAQ
 
 #### Q: I get `401 Unauthorized` or empty tables when fetching data.
-**A:** Apply the base schema and all timestamped migrations in the order listed above. Confirm the `.env` URL/key and the ESP32 `DEVICE_API_KEY` match `machine_settings.device_api_key`.
+**A:** Apply the base schema and all timestamped migrations in order. Set `FIRMWARE_DEVICE_API_KEY` in local `.env` to the device key configured through the authenticated machine settings page, then run `npm run firmware:configure`. The anon key cannot read `machine_settings`.
 
 #### Q: The dashboard says “Waiting for ESP32” although the hardware is powered.
 **A:** Check Serial Monitor at 115200 baud for Wi-Fi and `heartbeat_esp32` success. Apply `20260912100000_esp32_realtime_heartbeat.sql`, then re-flash the firmware. The status becomes connected only after a successful, recent authenticated heartbeat (within 25 seconds).

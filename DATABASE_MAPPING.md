@@ -5,7 +5,7 @@ The current source is `Php_Version/4peace_db.sql`, a 2026-11-12 phpMyAdmin dump 
 | MySQL table | Supabase table | React use / current gap |
 |---|---|---|
 | `admins` | `admins` (legacy archive) | Current React login uses Supabase Auth/`profiles`, but the user requested the legacy `admins` table. This is unresolved; do not treat the current login as parity or copy legacy hashes into Auth. |
-| `slots` | `slots` | Overview, slots, settings, transactions |
+| `slots` | `slots` | Overview, slots, settings, transactions; device reads use the key-checked `get_machine_slots` RPC and app reads use profile RLS |
 | `transactions` | `transactions` | Overview, transaction history/export |
 | `gcash_payments` | `gcash_payments` | Transaction approvals; source dump adds `Notes`, unused by both frontends |
 | `device_health` | `device_health` | Overview and health |
