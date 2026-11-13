@@ -263,7 +263,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_DRZfiimKuXLYdLvE-7iVxQ_yZLMr2OS
 ```powershell
 npm run dev
 ```
-Open **`http://localhost:5173`** in your browser.
+Open **`http://127.0.0.1:4173`** in your browser.
 
 ### 5. Build for Production
 ```powershell
@@ -371,7 +371,7 @@ Flash `firmware/4peace_esp32_firmware` and open Serial Monitor at **115200 baud*
 
 ## 🔑 Default Credentials & Configuration
 
-- **Dashboard Login URL:** `http://localhost:5173/login`
+- **Dashboard Login URL:** `http://127.0.0.1:4173/login`
 - **Default Username:** `admin`
 - **Default Password:** `4peace2026`
 - **Device API Key:** `4peace-esp32-live-token-2026`

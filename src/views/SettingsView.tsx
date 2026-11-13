@@ -25,7 +25,6 @@ interface Profile {
   id: string;
   full_name: string;
   username: string;
-  email: string;
   phone: string;
   role: string;
   last_login: string | null;
@@ -134,7 +133,7 @@ export default function SettingsView() {
       setProfile(data);
       setProfFullName(data.full_name ?? '');
       setProfUsername(data.username ?? '');
-      setProfEmail(data.email ?? '');
+      setProfEmail(admin?.email ?? '');
       setProfPhone(data.phone ?? '');
     }
   }

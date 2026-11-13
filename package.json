@@ -7,6 +7,8 @@
     "firmware:configure": "node scripts/firmware-configure.mjs",
     "firmware:check": "node scripts/firmware-check.mjs",
     "test:coin-reset": "node scripts/test-coin-reset.mjs",
+    "test:coin-reset-db": "pwsh -NoProfile -File scripts/test-coin-reset-db.ps1",
+    "test:profile-role-boundary": "pwsh -NoProfile -File scripts/test-profile-role-boundary.ps1",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
