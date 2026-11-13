@@ -10,7 +10,7 @@
 | Notifications/read-all | `NotificationsView` | UI/actions exist; PHP API source missing. |
 | SMS logs | `SmsLogsView` | UI exists; PHP API source missing. |
 | ESP32 logs | `Esp32LogsView` | UI exists; PHP API source missing. |
-| ESP32 PIN status, assignment, device catalog | Settings + `Esp32PinStatusModal` | UI and RPC-backed actions exist; PHP endpoint source missing. |
+| ESP32 PIN status, assignment, device catalog | Settings + `Esp32PinStatusModal` | Additive RPC guards allow authenticated Administrator/Machine Technician profiles; disposable PostgreSQL tests cover creation, assignment, validation, and anon denial. Live migration and authenticated UI remain unverified; PHP endpoint source is missing. |
 | Product/slot settings | `SettingsView` | Product name/capacity controls exist. |
 | Machine settings | `SettingsView` | Wi-Fi and other settings exist; coin balance status/reset implemented through Supabase RPC. |
 | Admin profile/logout | `SettingsView`, Supabase Auth | Profile UI exists; PHP profile/auth source missing; auth-table choice remains unresolved. |

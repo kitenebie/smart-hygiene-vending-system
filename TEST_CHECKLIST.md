@@ -10,6 +10,7 @@
 - [x] `npm run test:coin-reset` — passed PHP/React regex parity, PHP-dump-shaped credit messages, latest-log query ordering, admin-only UI/RPC checks, database locking, notification creation, firmware token persistence, and checks that the one-file setup includes the reset column/RPC without destructive SQL.
 - [x] `npm run test:coin-reset-db` — disposable PostgreSQL integration passed: admin reset incremented token 7→8 and created one notification; technician and anon calls were denied and left token/notification state unchanged.
 - [x] `npm run test:restock-db` — disposable PostgreSQL integration applied the legacy anon grant then the new guard; admin/technician restocks passed, capacity/invalid/missing-slot checks passed, and anon/unprofiled users were denied without stock changes.
+- [x] `npm run test:pin-rpc-db` — disposable PostgreSQL integration applied the legacy anon grants then the new guards; authenticated catalog creation/assignment and input validation passed, anon/unprofiled calls were denied, and denied calls made no writes.
 - [x] `npm run test:profile-role-boundary` — disposable PostgreSQL test passed: new Auth profiles default to `Machine Technician`, self-promotion is denied even after seeding a legacy column-level `role` grant, allowed profile edits still work, and existing roles are preserved.
 - [x] Settings PHP/React source parity review — both pages include product/slot editing, admin profile, last-login/role display, machine settings, Wi-Fi, PIN detection, and coin reset; React handlers are wired to Supabase. This is structural review only, not an authenticated-save or pixel-level visual test.
 - [x] Settings profile email source audit — `profiles` has no email column, so React now loads the field from the authenticated Supabase user context. Build passed after the fix; actual authenticated email change/confirmation remains unverified.
@@ -52,7 +53,7 @@
 | Notifications | TypeScript/Vite build | Mark-read/all-read, unread count, realtime refresh, and permission checks |
 | SMS Logs | TypeScript/Vite build | Search/filter/pagination and live SMS data access |
 | ESP32 Logs | TypeScript/Vite build | Filters, pagination, live query permissions, and realtime behavior |
-| Settings/Profile/PIN diagnostics | PHP/React source structure comparison; TypeScript/Vite build | Authenticated settings/profile writes, password/email change, PIN RPC authorization, and pixel-level visual parity |
+| Settings/Profile/PIN diagnostics | PHP/React source structure comparison; disposable PostgreSQL PIN RPC test; TypeScript/Vite build | Authenticated profile/machine saves, password/email confirmation, live PIN UI actions, and pixel-level visual parity |
 | CSV export | TypeScript/Vite build | Exported rows, formatting, and filtering parity |
 
 The build confirms these modules compile; it does not count as an end-to-end module test. No authenticated React test session was confirmed for the pending checks.
@@ -66,7 +67,7 @@ The build confirms these modules compile; it does not count as an end-to-end mod
 - [x] PHP inventory, database mapping, route mapping, and module checklist exist; eight dashboard views have React counterparts and React Router is present.
 - [x] Supabase migration/data bundle is generated locally from the latest dump.
 - [ ] Apply and verify schema/data in authorized Supabase staging; direct API reads work, but linked CLI/SQL access returns HTTP 403.
-- [ ] Finish table-level RLS policies and verify role permissions; multiple legacy migrations leave app tables with RLS disabled.
+- [ ] Finish table-level RLS policies and verify role permissions; local RPC guards now cover reset/restock/PIN actions, but multiple legacy migrations leave app tables with RLS disabled and live migrations remain unverified.
 - [ ] Resolve the requested `admins`-table login vs current Supabase Auth/`profiles` flow, then complete safe legacy account linking/reset. Imported PHP password hashes are not Supabase Auth credentials.
 - [ ] Verify every module end-to-end and compare the live PHP UI; 18 PHP API implementations and PHP auth/database files are missing.
 - [ ] Match the requested JavaScript/JSX stack; current React source is TypeScript/TSX.

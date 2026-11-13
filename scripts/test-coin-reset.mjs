@@ -24,6 +24,7 @@ assert.equal(parseCredit('no reported balance'), null);
 const schema = read('../supabase/migrations/20261113000000_legacy_schema_delta.sql');
 const rpc = read('../supabase/migrations/20261113001000_coin_balance_reset_rpc.sql');
 const profileSecurity = read('../supabase/migrations/20261113003000_profiles_role_boundary.sql');
+const pinRpcSecurity = read('../supabase/migrations/20261113005000_esp32_pin_rpc_role_guard.sql');
 const profileCreation = read('../supabase/migrations/20261103000000_supabase_auth_profiles.sql');
 const health = read('../src/views/HealthView.tsx');
 const settings = read('../src/views/SettingsView.tsx');
@@ -41,6 +42,9 @@ assert.match(profileSecurity, /ALTER COLUMN role SET DEFAULT 'Machine Technician
 assert.match(profileSecurity, /REVOKE UPDATE ON TABLE public\.profiles FROM PUBLIC, anon, authenticated/);
 assert.match(profileSecurity, /REVOKE UPDATE \(role\) ON TABLE public\.profiles FROM PUBLIC, anon, authenticated/);
 assert.match(profileSecurity, /GRANT UPDATE \(username, full_name, phone, last_login\)[\s\S]*TO authenticated/);
+assert.match(pinRpcSecurity, /role IN \('Administrator', 'Machine Technician'\)/);
+assert.match(pinRpcSecurity, /REVOKE ALL ON FUNCTION public\.create_esp32_pin_device\(text, text\) FROM PUBLIC, anon/);
+assert.match(pinRpcSecurity, /REVOKE ALL ON FUNCTION public\.assign_esp32_pin_device\(text, integer, bigint\) FROM PUBLIC, anon/);
 assert.match(profileCreation, /INSERT INTO public\.profiles \(id, username, full_name, phone\)/);
 assert.match(helper, /rpc\('request_coin_balance_reset'\)/);
 assert.match(health, /admin\?\.role === 'Administrator'/);
@@ -57,7 +61,13 @@ assert.match(setup, /GRANT UPDATE \(username, full_name, phone, last_login\)[\s\
 const legacyRestockGrant = setup.indexOf('GRANT EXECUTE ON FUNCTION public.restock_slot(INTEGER, INTEGER) TO anon, authenticated;');
 const restockRoleGuard = setup.indexOf('REVOKE ALL ON FUNCTION public.restock_slot(integer, integer) FROM PUBLIC, anon;');
 assert.ok(legacyRestockGrant >= 0 && restockRoleGuard > legacyRestockGrant, 'one-time setup must revoke the legacy anonymous restock grant after applying the role guard');
+const legacyPinCreateGrant = setup.indexOf('GRANT EXECUTE ON FUNCTION public.create_esp32_pin_device(TEXT, TEXT) TO anon, authenticated;');
+const pinCreateRoleGuard = setup.indexOf('REVOKE ALL ON FUNCTION public.create_esp32_pin_device(text, text) FROM PUBLIC, anon;');
+const legacyPinAssignGrant = setup.indexOf('GRANT EXECUTE ON FUNCTION public.assign_esp32_pin_device(TEXT, INTEGER, BIGINT) TO anon, authenticated;');
+const pinAssignRoleGuard = setup.indexOf('REVOKE ALL ON FUNCTION public.assign_esp32_pin_device(text, integer, bigint) FROM PUBLIC, anon;');
+assert.ok(legacyPinCreateGrant >= 0 && pinCreateRoleGuard > legacyPinCreateGrant, 'one-time setup must revoke the legacy anonymous PIN create grant');
+assert.ok(legacyPinAssignGrant >= 0 && pinAssignRoleGuard > legacyPinAssignGrant, 'one-time setup must revoke the legacy anonymous PIN assignment grant');
 assert.doesNotMatch(setup, /\b(DROP TABLE|TRUNCATE TABLE)\b/i);
 assert.doesNotMatch(setup, /20261103010000_import_legacy_mysql_data\.sql/);
 
-console.log('PASS coin reset parser, role gate, RPC wiring, firmware persistence, and setup safety/restock grant-order checks');
+console.log('PASS coin reset, role-boundary, restock/PIN RPC grant-order, firmware persistence, and setup safety checks');
