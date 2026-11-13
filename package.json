@@ -10,6 +10,7 @@
     "test:coin-reset-db": "pwsh -NoProfile -File scripts/test-coin-reset-db.ps1",
     "test:profile-role-boundary": "pwsh -NoProfile -File scripts/test-profile-role-boundary.ps1",
     "test:restock-db": "pwsh -NoProfile -File scripts/test-restock-slot-db.ps1",
+    "test:pin-rpc-db": "pwsh -NoProfile -File scripts/test-pin-rpc-db.ps1",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",

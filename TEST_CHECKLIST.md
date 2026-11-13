@@ -9,6 +9,7 @@
 - [x] Direct Oxlint run — 0 errors, 5 warnings. Warnings are in dashboard/auth/toast code, the Settings effect dependency, and legacy PHP JS. The `npm run lint` wrapper returned an output-parser error; direct Oxlint gave its normal result.
 - [x] `npm run test:coin-reset` — passed PHP/React regex parity, PHP-dump-shaped credit messages, latest-log query ordering, admin-only UI/RPC checks, database locking, notification creation, firmware token persistence, and checks that the one-file setup includes the reset column/RPC without destructive SQL.
 - [x] `npm run test:coin-reset-db` — disposable PostgreSQL integration passed: admin reset incremented token 7→8 and created one notification; technician and anon calls were denied and left token/notification state unchanged.
+- [x] `npm run test:restock-db` — disposable PostgreSQL integration applied the legacy anon grant then the new guard; admin/technician restocks passed, capacity/invalid/missing-slot checks passed, and anon/unprofiled users were denied without stock changes.
 - [x] `npm run test:profile-role-boundary` — disposable PostgreSQL test passed: new Auth profiles default to `Machine Technician`, self-promotion is denied even after seeding a legacy column-level `role` grant, allowed profile edits still work, and existing roles are preserved.
 - [x] Settings PHP/React source parity review — both pages include product/slot editing, admin profile, last-login/role display, machine settings, Wi-Fi, PIN detection, and coin reset; React handlers are wired to Supabase. This is structural review only, not an authenticated-save or pixel-level visual test.
 - [x] Settings profile email source audit — `profiles` has no email column, so React now loads the field from the authenticated Supabase user context. Build passed after the fix; actual authenticated email change/confirmation remains unverified.
@@ -45,7 +46,7 @@
 |---|---|---|
 | Login/Auth | Local + live-domain required email/password fields, malformed-email browser validation, unauthenticated redirect, and local PostgreSQL role-boundary regression | Resolve `admins` table vs Supabase Auth requirement; then test real sign-in, logout, password update/reset, existing-role audit, and live role-based access |
 | Overview/Dashboard | TypeScript/Vite build | Authenticated live totals, filters, realtime refresh, and role permissions |
-| Slots/Inventory | TypeScript/Vite build | Stock restock RPC, validation, permissions, and live updates |
+| Slots/Inventory | Disposable PostgreSQL RPC test; React validation source review; TypeScript/Vite build | Authenticated live restock and live data refresh |
 | Transactions/GCash | TypeScript/Vite build | Approve/reject, notification side effects, search/filter, and CSV export against staging |
 | Device Health/Coin reset | Live bundle contains reset UI/RPC call; live schema recognizes reset column; anonymous RPC is denied; parser/helper checks, local PostgreSQL RPC and profile-role tests, firmware token persistence static check, and live read-only reported balance | Authenticated admin UI confirmation flow, successful live admin RPC, existing role audit, firmware acknowledgement on hardware |
 | Notifications | TypeScript/Vite build | Mark-read/all-read, unread count, realtime refresh, and permission checks |

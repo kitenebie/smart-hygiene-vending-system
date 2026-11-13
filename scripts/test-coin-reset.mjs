@@ -54,7 +54,10 @@ assert.match(setup, /CREATE OR REPLACE FUNCTION public\.request_coin_balance_res
 assert.match(setup, /GRANT EXECUTE ON FUNCTION public\.request_coin_balance_reset\(\) TO authenticated/);
 assert.match(setup, /ALTER COLUMN role SET DEFAULT 'Machine Technician'/);
 assert.match(setup, /GRANT UPDATE \(username, full_name, phone, last_login\)[\s\S]*TO authenticated/);
+const legacyRestockGrant = setup.indexOf('GRANT EXECUTE ON FUNCTION public.restock_slot(INTEGER, INTEGER) TO anon, authenticated;');
+const restockRoleGuard = setup.indexOf('REVOKE ALL ON FUNCTION public.restock_slot(integer, integer) FROM PUBLIC, anon;');
+assert.ok(legacyRestockGrant >= 0 && restockRoleGuard > legacyRestockGrant, 'one-time setup must revoke the legacy anonymous restock grant after applying the role guard');
 assert.doesNotMatch(setup, /\b(DROP TABLE|TRUNCATE TABLE)\b/i);
 assert.doesNotMatch(setup, /20261103010000_import_legacy_mysql_data\.sql/);
 
-console.log('PASS coin reset parser, role gate, RPC wiring, firmware persistence, and setup safety checks');
+console.log('PASS coin reset parser, role gate, RPC wiring, firmware persistence, and setup safety/restock grant-order checks');

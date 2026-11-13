@@ -4,7 +4,7 @@
 |---|---|---|
 | Login/session | `LoginPage`, `AuthProvider` | React currently uses Supabase Auth/`profiles`, while the user's instruction requested the legacy `admins` table; this is unresolved. PHP auth files are missing. Email format is validated in-browser, but that is not login parity. |
 | Overview/analytics | `OverviewView` | UI/data path exists; PHP endpoint source missing. |
-| Slots/inventory/restock | `SlotsView` | UI and `restock_slot` RPC exist; exact PHP endpoint validation unavailable. |
+| Slots/inventory/restock | `SlotsView` | React validation and `restock_slot` RPC exist; additive migration limits the RPC to authenticated Administrator/Machine Technician profiles; disposable PostgreSQL behavior passes. Live migration and data access remain unverified. |
 | Transactions/GCash approval/export | `TransactionsView` | Listing, approve/reject, CSV exist; PHP API source missing. |
 | Device Health | `HealthView` | Telemetry/history UI and admin-only coin reset action implemented; remote/hardware verification pending. |
 | Notifications/read-all | `NotificationsView` | UI/actions exist; PHP API source missing. |
