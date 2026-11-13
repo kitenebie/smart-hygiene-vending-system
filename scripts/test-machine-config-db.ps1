@@ -74,7 +74,7 @@ INSERT INTO public.machine_settings VALUES
   if ($LASTEXITCODE -ne 0) { throw 'Fixture setup failed' }
 
   $repoRoot = Split-Path -Parent $PSScriptRoot
-  & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\migrations\20261113007000_machine_settings_device_rpc.sql') | Out-Null
+  & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\deferred_migrations\20261113007000_machine_settings_device_rpc.sql') | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Machine settings hardening migration failed' }
 
   $testPath = Join-Path $clusterRoot 'test.sql'

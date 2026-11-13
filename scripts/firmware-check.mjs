@@ -13,6 +13,8 @@ async function request(path, options = {}) {
   return { status: response.status, data: await response.json() };
 }
 for (const path of [
+  'slots?select=id,slot_code,product_name,stock,capacity&order=id.asc',
+  'machine_settings?select=unit_price,low_stock_threshold,tamper_alarm_enabled&order=id.desc&limit=1',
   'gcash_payments?select=status,consumed_at,slot_id,amount&limit=0',
   'transactions?select=device_tx_id,machine_id,payment_ref_code&limit=0',
   'device_health?id=eq.1&select=id,last_sync',
@@ -22,27 +24,16 @@ for (const path of [
 ]) {
   const result = await request(path);
   assert.equal(result.status, 200, `${path}: HTTP ${result.status}`);
-  if (path.startsWith('device_health?')) assert.equal(result.data.length, 1);
+  if (path.startsWith('slots?')) {
+    assert.equal(result.data.length, 5, 'Expected five physical slots');
+    assert.deepEqual(result.data.map(s => s.slot_code).sort(), ['S1', 'S2', 'S3', 'S4', 'S5']);
+  }
+  if (path.startsWith('device_health?') || path.startsWith('machine_settings?')) assert.equal(result.data.length, 1);
   console.log(`PASS ${path.split('?')[0]}`);
 }
-const configResult = await request('rpc/get_machine_config', {
-  method: 'POST', body: JSON.stringify({ p_device_key: values.DEVICE_API_KEY }),
-});
-assert.equal(configResult.status, 200, `get_machine_config: HTTP ${configResult.status}`);
-assert.equal(configResult.data.success, true, 'device key must read machine configuration');
-assert.ok('unit_price' in configResult.data && 'tamper_alarm_enabled' in configResult.data);
-assert.equal('device_api_key' in configResult.data || 'wifi_password' in configResult.data, false, 'configuration RPC must omit secrets');
-console.log('PASS protected machine config RPC and response fields');
-const slotsResult = await request('rpc/get_machine_slots', {
-  method: 'POST', body: JSON.stringify({ p_device_key: values.DEVICE_API_KEY }),
-});
-assert.equal(slotsResult.status, 200, `get_machine_slots: HTTP ${slotsResult.status}`);
-assert.equal(slotsResult.data.length, 5, 'Expected five physical slots');
-assert.deepEqual(slotsResult.data.map(s => s.slot_code).sort(), ['S1', 'S2', 'S3', 'S4', 'S5']);
-assert.equal(slotsResult.data.some(s => s.id === 0), false, 'slot 0 must not exist before the no-write RPC probe');
-console.log('PASS protected machine slots RPC and five-slot layout');
 // Exercise the real firmware RPC signature/token without recording a sale:
 // slot_id=0 is verified absent before calling, so the RPC must reject it.
+assert.deepEqual((await request('slots?id=eq.0&select=id')).data, []);
 const result = await request('rpc/complete_vend', {
   method: 'POST', body: JSON.stringify({
     p_device_key: values.DEVICE_API_KEY, p_device_tx_id: `check-${Date.now()}`,

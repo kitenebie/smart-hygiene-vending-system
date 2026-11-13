@@ -147,41 +147,48 @@ void addSupabaseHeaders(HTTPClient &http, bool json) {
   }
 }
 
-bool httpFetchMachineConfig(StaticJsonDocument<1024> &doc) {
+bool httpFetchConfig() {
   if (WiFi.status() != WL_CONNECTED) return false;
 
   WiFiClientSecure client;
   configureSecureClient(client);
-  HTTPClient http;
-  String url = String(SUPABASE_URL) + "/rest/v1/rpc/get_machine_config";
 
-  logSupabaseRequest("POST", "rpc/get_machine_config");
+  HTTPClient http;
+
+  String url =
+    String(SUPABASE_URL) +
+    "/rest/v1/machine_settings?select=*&order=id.desc&limit=1";
+
+  logSupabaseRequest("GET", "machine_settings");
   if (!http.begin(client, url)) {
-    logSupabaseBeginFailure("POST", "rpc/get_machine_config");
+    logSupabaseBeginFailure("GET", "machine_settings");
     return false;
   }
-  addSupabaseHeaders(http, true);
+  addSupabaseHeaders(http);
 
-  StaticJsonDocument<128> requestDoc;
-  requestDoc["p_device_key"] = DEVICE_API_KEY;
-  String body;
-  serializeJson(requestDoc, body);
-  int code = http.POST(body);
-  logSupabaseResponse("POST", "rpc/get_machine_config", code);
+  int code = http.GET();
+  logSupabaseResponse("GET", "machine_settings", code);
+
+  if (code != 200) {
+    Serial.printf("[CONFIG] machine_settings HTTP %d\n", code);
+    http.end();
+    return false;
+  }
+
   String payload = http.getString();
   http.end();
-  if (code != 200 || deserializeJson(doc, payload) || !doc.is<JsonObject>() ||
-      !(doc["success"] | false)) {
-    Serial.printf("[CONFIG] get_machine_config HTTP %d or invalid response\n", code);
+
+  StaticJsonDocument<1024> doc;
+  if (deserializeJson(doc, payload)) {
+    Serial.println("[CONFIG] JSON parse failed.");
     return false;
   }
-  return true;
-}
 
-bool httpFetchConfig() {
-  StaticJsonDocument<1024> doc;
-  if (!httpFetchMachineConfig(doc)) return false;
-  JsonObject obj = doc.as<JsonObject>();
+  if (!doc.is<JsonArray>() || doc.size() == 0) {
+    return false;
+  }
+
+  JsonObject obj = doc[0].as<JsonObject>();
 
   if (obj["unit_price"].isNull() || obj["low_stock_threshold"].isNull() ||
       obj["tamper_alarm_enabled"].isNull()) {
@@ -246,10 +253,30 @@ bool httpFetchConfig() {
 }
 
 bool httpFetchPinMonitoringState() {
-  StaticJsonDocument<1024> doc;
-  if (!httpFetchMachineConfig(doc)) return false;
+  if (WiFi.status() != WL_CONNECTED) return false;
 
-  bool enabled = doc["enable_pin_connection_detection"] | false;
+  WiFiClientSecure client;
+  configureSecureClient(client);
+  HTTPClient http;
+  String url = String(SUPABASE_URL) +
+    "/rest/v1/machine_settings?select=enable_pin_connection_detection&order=id.desc&limit=1";
+
+  logSupabaseRequest("GET", "machine_settings (pin monitoring)");
+  if (!http.begin(client, url)) {
+    logSupabaseBeginFailure("GET", "machine_settings (pin monitoring)");
+    return false;
+  }
+  addSupabaseHeaders(http);
+  int code = http.GET();
+  logSupabaseResponse("GET", "machine_settings (pin monitoring)", code);
+  String payload = http.getString();
+  http.end();
+  if (code != 200) return false;
+
+  StaticJsonDocument<192> doc;
+  if (deserializeJson(doc, payload) || !doc.is<JsonArray>() || doc.size() == 0) return false;
+
+  bool enabled = doc[0]["enable_pin_connection_detection"] | false;
   if (pinConnectionDetectionEnabled && !enabled) {
     restorePinDiagnosticOutputs();
   }
@@ -270,24 +297,22 @@ bool httpFetchSlots() {
 
   HTTPClient http;
 
-  String url = String(SUPABASE_URL) + "/rest/v1/rpc/get_machine_slots";
+  String url =
+    String(SUPABASE_URL) +
+    "/rest/v1/slots?select=id,slot_code,product_name,stock,capacity&order=id.asc";
 
-  logSupabaseRequest("POST", "rpc/get_machine_slots");
+  logSupabaseRequest("GET", "slots");
   if (!http.begin(client, url)) {
-    logSupabaseBeginFailure("POST", "rpc/get_machine_slots");
+    logSupabaseBeginFailure("GET", "slots");
     return false;
   }
-  addSupabaseHeaders(http, true);
+  addSupabaseHeaders(http);
 
-  StaticJsonDocument<128> requestDoc;
-  requestDoc["p_device_key"] = DEVICE_API_KEY;
-  String body;
-  serializeJson(requestDoc, body);
-  int code = http.POST(body);
-  logSupabaseResponse("POST", "rpc/get_machine_slots", code);
+  int code = http.GET();
+  logSupabaseResponse("GET", "slots", code);
 
   if (code != 200) {
-    Serial.printf("[SLOTS] get_machine_slots HTTP %d\n", code);
+    Serial.printf("[SLOTS] HTTP %d\n", code);
     http.end();
     return false;
   }

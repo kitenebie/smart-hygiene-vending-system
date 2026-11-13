@@ -77,7 +77,8 @@ CREATE TABLE public.gcash_payments (
   slot_id integer REFERENCES public.slots(id) ON DELETE SET NULL,
   status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   created_at timestamptz DEFAULT now(),
-  resolved_at timestamptz
+  resolved_at timestamptz,
+  "Notes" text NOT NULL DEFAULT ''
 );
 CREATE TABLE public.transactions (
   id serial PRIMARY KEY,
@@ -88,9 +89,23 @@ CREATE TABLE public.transactions (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE public.device_health (id serial PRIMARY KEY, last_sync timestamptz DEFAULT now());
+CREATE TABLE public.machine_health_logs (
+  id serial PRIMARY KEY,
+  level text NOT NULL CHECK (level IN ('info', 'warning', 'critical')),
+  message varchar(255) NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+CREATE TABLE public.notifications (
+  id serial PRIMARY KEY,
+  type text NOT NULL DEFAULT 'system' CHECK (type IN ('gcash', 'stock', 'coin_box', 'tamper', 'system', 'sms')),
+  level text NOT NULL DEFAULT 'info' CHECK (level IN ('info', 'warning', 'critical')),
+  message varchar(255) NOT NULL,
+  is_read boolean NOT NULL DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
 ALTER TABLE public.machine_settings DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.slots DISABLE ROW LEVEL SECURITY;
-GRANT ALL ON TABLE public.machine_settings, public.slots, public.gcash_payments, public.transactions, public.device_health TO anon, authenticated;
+GRANT ALL ON TABLE public.machine_settings, public.slots, public.gcash_payments, public.transactions, public.device_health, public.machine_health_logs, public.notifications TO anon, authenticated;
 INSERT INTO public.profiles VALUES
   ('11111111-1111-4111-8111-111111111111', 'Administrator'),
   ('22222222-2222-4222-8222-222222222222', 'Machine Technician');
@@ -102,6 +117,8 @@ INSERT INTO public.slots VALUES
   (3, 'S3', 'Milk', 10, 30),
   (4, 'S4', 'Soda', 11, 30),
   (5, 'S5', 'Tea', 12, 30);
+INSERT INTO public.gcash_payments (ref_code, amount, slot_id, status)
+VALUES ('GC-TEST-01', 14.5, 2, 'approved');
 '@ | Set-Content -LiteralPath $fixturePath -Encoding utf8
   & $psql @pgArgs -f $fixturePath | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Fixture setup failed' }
@@ -109,10 +126,14 @@ INSERT INTO public.slots VALUES
   $repoRoot = Split-Path -Parent $PSScriptRoot
   & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\migrations\20260910053637_firmware_connection.sql') | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Firmware vend RPC migration failed' }
-  & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\migrations\20261113007000_machine_settings_device_rpc.sql') | Out-Null
+  & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\deferred_migrations\20261113007000_machine_settings_device_rpc.sql') | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Machine settings hardening migration failed' }
-  & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\migrations\20261113008000_authenticated_slots_device_rpc.sql') | Out-Null
+  & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\deferred_migrations\20261113008000_authenticated_slots_device_rpc.sql') | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Slots hardening migration failed' }
+  & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\deferred_migrations\20261113009000_gcash_transactions_device_rpc.sql') | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Payments/transactions hardening migration failed' }
+  & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\deferred_migrations\20261113010000_health_notification_device_rpc.sql') | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Health/notification hardening migration failed' }
 
   $testPath = Join-Path $clusterRoot 'test.sql'
   @'
@@ -121,6 +142,13 @@ DO $$ DECLARE result jsonb; BEGIN
   IF NOT has_table_privilege('authenticated', 'public.slots', 'SELECT') THEN RAISE EXCEPTION 'profiles lost slots read access'; END IF;
   IF NOT has_column_privilege('authenticated', 'public.slots', 'product_name', 'UPDATE') OR NOT has_column_privilege('authenticated', 'public.slots', 'capacity', 'UPDATE') THEN RAISE EXCEPTION 'profiles lost product/capacity edit access'; END IF;
   IF has_column_privilege('authenticated', 'public.slots', 'stock', 'UPDATE') OR has_table_privilege('authenticated', 'public.slots', 'INSERT') OR has_table_privilege('authenticated', 'public.slots', 'DELETE') THEN RAISE EXCEPTION 'profiles retain unintended slot write access'; END IF;
+  IF has_table_privilege('anon', 'public.gcash_payments', 'SELECT') OR has_table_privilege('anon', 'public.transactions', 'SELECT') THEN RAISE EXCEPTION 'anon retains payment/transaction read access'; END IF;
+  IF NOT has_table_privilege('authenticated', 'public.gcash_payments', 'SELECT') OR NOT has_table_privilege('authenticated', 'public.transactions', 'SELECT') THEN RAISE EXCEPTION 'profiles lost payment/transaction read access'; END IF;
+  IF NOT has_column_privilege('authenticated', 'public.gcash_payments', 'status', 'UPDATE') OR has_column_privilege('authenticated', 'public.gcash_payments', 'consumed_at', 'UPDATE') THEN RAISE EXCEPTION 'payment resolution grants are incorrect'; END IF;
+  IF has_table_privilege('anon', 'public.machine_health_logs', 'SELECT') OR has_table_privilege('anon', 'public.notifications', 'SELECT') THEN RAISE EXCEPTION 'anon retains health/notification read access'; END IF;
+  IF NOT has_table_privilege('authenticated', 'public.machine_health_logs', 'SELECT') OR NOT has_table_privilege('authenticated', 'public.notifications', 'SELECT') THEN RAISE EXCEPTION 'profiles lost health/notification read access'; END IF;
+  IF has_column_privilege('authenticated', 'public.notifications', 'message', 'UPDATE') OR NOT has_column_privilege('authenticated', 'public.notifications', 'is_read', 'UPDATE') THEN RAISE EXCEPTION 'notification update grants are incorrect'; END IF;
+  IF NOT has_sequence_privilege('authenticated', 'public.notifications_id_seq', 'USAGE') THEN RAISE EXCEPTION 'profile notification insert sequence access missing'; END IF;
   result := public.get_machine_slots('test-device-key');
   IF jsonb_typeof(result) <> 'array' OR jsonb_array_length(result) <> 5 OR result->0->>'slot_code' <> 'S1' THEN RAISE EXCEPTION 'device slots RPC returned incorrect rows: %', result; END IF;
   IF result->0 ? 'device_api_key' OR result->0 ? 'wifi_password' THEN RAISE EXCEPTION 'slots RPC exposed a secret'; END IF;
@@ -171,12 +199,127 @@ DO $$ DECLARE result jsonb; BEGIN
   END;
   result := public.complete_vend('test-device-key', 'valid-vend-0001', 'VM001', '', 'coin', 1, 14.5);
   IF result->>'success' <> 'true' OR result->>'stock' <> '7' THEN RAISE EXCEPTION 'complete_vend could not update protected slot stock: %', result; END IF;
+  result := public.complete_vend('test-device-key', 'valid-gcash-vend-0001', 'VM001', 'GC-TEST-01', 'gcash', 2, 14.5);
+  IF result->>'success' <> 'true' OR result->>'stock' <> '8' THEN RAISE EXCEPTION 'GCash vend failed under slot/table RLS: %', result; END IF;
+END $$;
+ROLLBACK;
+BEGIN;
+SET LOCAL ROLE anon;
+DO $$ DECLARE result jsonb; status_result jsonb; BEGIN
+  BEGIN PERFORM ref_code FROM public.gcash_payments;
+    RAISE EXCEPTION 'anon payment read unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN PERFORM id FROM public.transactions;
+    RAISE EXCEPTION 'anon transaction read unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN INSERT INTO public.gcash_payments (ref_code, amount, slot_id, status) VALUES ('GC-RAW-INSERT', 14.5, 1, 'pending');
+    RAISE EXCEPTION 'anon payment insert unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  result := public.submit_gcash_payment('test-device-key', 'GC-NEW-01', 3, 14.5);
+  IF result->>'success' <> 'true' THEN RAISE EXCEPTION 'valid payment submit failed: %', result; END IF;
+  result := public.submit_gcash_payment('test-device-key', 'GC-NEW-01', 3, 14.5);
+  IF result->>'duplicate' <> 'true' THEN RAISE EXCEPTION 'duplicate reference was not identified: %', result; END IF;
+  result := public.submit_gcash_payment('wrong-key', 'GC-DENIED-01', 3, 14.5);
+  IF result->>'success' <> 'false' THEN RAISE EXCEPTION 'payment submit accepted an invalid device key'; END IF;
+  result := public.submit_gcash_payment('test-device-key', 'GC-BAD-AMOUNT', 3, 10);
+  IF result->>'success' <> 'false' THEN RAISE EXCEPTION 'payment submit accepted a mismatched amount'; END IF;
+  status_result := public.get_gcash_payment_status('test-device-key', 'GC-NEW-01');
+  IF status_result->>'success' <> 'true' OR status_result->>'status' <> 'pending' OR status_result ? 'Notes' THEN RAISE EXCEPTION 'status RPC returned incorrect or private fields: %', status_result; END IF;
+  status_result := public.get_gcash_payment_status('wrong-key', 'GC-NEW-01');
+  IF status_result->>'success' <> 'false' THEN RAISE EXCEPTION 'status RPC accepted an invalid device key'; END IF;
+  status_result := public.get_gcash_payment_status('test-device-key', 'CODEX-PROBE-NO-ROW');
+  IF status_result->>'found' <> 'false' THEN RAISE EXCEPTION 'missing payment probe unexpectedly found a record'; END IF;
+END $$;
+COMMIT;
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+DO $$ DECLARE row_count integer; BEGIN
+  SELECT count(*) INTO row_count FROM public.gcash_payments WHERE ref_code = 'GC-NEW-01';
+  IF row_count <> 1 THEN RAISE EXCEPTION 'profile cannot read GCash payment'; END IF;
+  UPDATE public.gcash_payments SET status = 'approved', resolved_at = now()
+  WHERE ref_code = 'GC-NEW-01' AND status = 'pending' AND consumed_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'profile cannot approve pending payment'; END IF;
+  BEGIN UPDATE public.gcash_payments SET consumed_at = now() WHERE ref_code = 'GC-NEW-01';
+    RAISE EXCEPTION 'profile directly changed fulfillment marker';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END $$;
+COMMIT;
+BEGIN;
+SET LOCAL ROLE anon;
+DO $$ DECLARE result jsonb; BEGIN
+  BEGIN PERFORM id FROM public.machine_health_logs;
+    RAISE EXCEPTION 'anon health log read unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN PERFORM id FROM public.notifications;
+    RAISE EXCEPTION 'anon notification read unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN INSERT INTO public.notifications (type, level, message) VALUES ('system', 'info', 'raw anon insert');
+    RAISE EXCEPTION 'anon notification insert unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  result := public.write_machine_health_log('test-device-key', 'warning', 'test health event');
+  IF result->>'success' <> 'true' THEN RAISE EXCEPTION 'device health log RPC failed: %', result; END IF;
+  result := public.write_machine_health_log('wrong-key', 'warning', 'denied health event');
+  IF result->>'success' <> 'false' THEN RAISE EXCEPTION 'invalid device key wrote a health log'; END IF;
+  result := public.write_device_notification('test-device-key', 'tamper', 'critical', 'test device alert');
+  IF result->>'success' <> 'true' THEN RAISE EXCEPTION 'device notification RPC failed: %', result; END IF;
+  result := public.write_device_notification('wrong-key', 'tamper', 'critical', 'denied device alert');
+  IF result->>'success' <> 'false' THEN RAISE EXCEPTION 'invalid device key wrote a notification'; END IF;
+  result := public.write_device_notification('test-device-key', 'not-a-type', 'critical', 'invalid type');
+  IF result->>'success' <> 'false' THEN RAISE EXCEPTION 'notification RPC accepted an invalid type'; END IF;
+END $$;
+COMMIT;
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+DO $$ DECLARE row_count integer; BEGIN
+  SELECT count(*) INTO row_count FROM public.machine_health_logs;
+  IF row_count <> 1 THEN RAISE EXCEPTION 'profile cannot read device health logs'; END IF;
+  SELECT count(*) INTO row_count FROM public.notifications;
+  IF row_count <> 1 THEN RAISE EXCEPTION 'profile cannot read device notifications'; END IF;
+  INSERT INTO public.notifications (type, level, message) VALUES ('gcash', 'info', 'dashboard notification');
+  UPDATE public.notifications SET is_read = true WHERE message = 'dashboard notification';
+  IF NOT FOUND THEN RAISE EXCEPTION 'profile cannot mark notification read'; END IF;
+  BEGIN UPDATE public.notifications SET message = 'changed message' WHERE message = 'dashboard notification';
+    RAISE EXCEPTION 'profile changed notification content';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END $$;
+COMMIT;
+BEGIN;
+SET LOCAL ROLE anon;
+DO $$ DECLARE result jsonb; status_result jsonb; BEGIN
+  result := public.complete_vend('test-device-key', 'valid-gcash-vend-0002', 'VM001', 'GC-NEW-01', 'gcash', 3, 14.5);
+  IF result->>'success' <> 'true' OR result->>'stock' <> '9' THEN RAISE EXCEPTION 'approved GCash vend failed under table RLS: %', result; END IF;
+  status_result := public.get_gcash_payment_status('test-device-key', 'GC-NEW-01');
+  IF status_result->>'status' <> 'approved' OR status_result->>'consumed_at' IS NULL THEN RAISE EXCEPTION 'complete_vend did not consume the approved payment: %', status_result; END IF;
+END $$;
+COMMIT;
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '33333333-3333-4333-8333-333333333333';
+DO $$ DECLARE row_count integer; BEGIN
+  SELECT count(*) INTO row_count FROM public.gcash_payments;
+  IF row_count <> 0 THEN RAISE EXCEPTION 'unprofiled user can read payments'; END IF;
+  SELECT count(*) INTO row_count FROM public.transactions;
+  IF row_count <> 0 THEN RAISE EXCEPTION 'unprofiled user can read transactions'; END IF;
+  SELECT count(*) INTO row_count FROM public.machine_health_logs;
+  IF row_count <> 0 THEN RAISE EXCEPTION 'unprofiled user can read health logs'; END IF;
+  SELECT count(*) INTO row_count FROM public.notifications;
+  IF row_count <> 0 THEN RAISE EXCEPTION 'unprofiled user can read notifications'; END IF;
 END $$;
 ROLLBACK;
 '@ | Set-Content -LiteralPath $testPath -Encoding utf8
   & $psql @pgArgs -f $testPath
   if ($LASTEXITCODE -ne 0) { throw 'Slots access assertions failed' }
-  'PASS: device-key RPC returns safe slot rows; anon and unprofiled reads are denied; profiled users can edit product/capacity but not stock.'
+  'PASS: device config/slot/payment/health/notification RPCs and vends work; invalid keys and anonymous reads are denied; profile RLS preserves dashboard actions.'
 }
 finally {
   if ($started) {

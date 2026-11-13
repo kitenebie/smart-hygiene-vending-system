@@ -40,34 +40,22 @@ These requests do not change Supabase data and should return HTTP `200`.
 ### A. Read slots
 
 ```http
-POST {{supabaseUrl}}/rest/v1/rpc/get_machine_slots
+GET {{supabaseUrl}}/rest/v1/slots?select=id,slot_code,product_name,stock,capacity&order=id.asc
 apikey: {{supabaseKey}}
-Content-Type: application/json
-
-{
-  "p_device_key": "{{deviceApiKey}}"
-}
 ```
 
-Expected: an array containing S1 through S5. This device-key RPC replaces direct
-anonymous reads. Set `slotId` to an existing row with stock above zero if you
-later do a controlled real-vend test.
+Expected: an array containing S1 through S5. Set `slotId` to the `id` of a slot
+with stock above zero if you later do a controlled real-vend test.
 
 ### B. Read current firmware settings
 
 ```http
-POST {{supabaseUrl}}/rest/v1/rpc/get_machine_config
+GET {{supabaseUrl}}/rest/v1/machine_settings?select=unit_price,low_stock_threshold,admin_sms_number,tamper_alarm_enabled&order=id.desc&limit=1
 apikey: {{supabaseKey}}
-Content-Type: application/json
-
-{
-  "p_device_key": "{{deviceApiKey}}"
-}
 ```
 
-Expected: a settings object with `success: true`. Confirm `unit_price` matches
-`amount` and the property name is `tamper_alarm_enabled`. The RPC omits the
-device key and Wi-Fi password; the anon key cannot read `machine_settings`.
+Expected: one settings object. Confirm `unit_price` matches `amount` and the
+property name is `tamper_alarm_enabled`.
 
 ### C. Read device health
 
@@ -323,7 +311,7 @@ pm.test('Vend completed once', () => {
 | `200` / `201` | Request reached Supabase successfully | Inspect the returned row or dashboard. |
 | `401` / `403` | Key is missing, invalid, or not allowed | Re-copy `SUPABASE_KEY`; never use a service-role/secret key in firmware. |
 | `409` on GCash POST | `ref_code` already exists | Change `testRef`; do not reuse an already consumed payment. |
-| `400 invalid device key` | RPC was reached but token does not match `machine_settings` | Set `FIRMWARE_DEVICE_API_KEY` in local `.env`, run `npm run firmware:configure`, then rebuild and flash. |
+| `400 invalid device key` | RPC was reached but token does not match `machine_settings` | Run `npm run firmware:configure`, then rebuild and flash. |
 | `400 gcash payment is not approved` | Payment is still pending/rejected | Approve it in the dashboard, then re-check its status. |
 | `400 slot is out of stock` | Slot stock is zero | Refill/update the correct slot before a real vend. |
 | SSL or timeout | Device cannot complete HTTPS | Check 2.4 GHz Wi-Fi, DNS/internet, and NTP access for TLS time validation. |
