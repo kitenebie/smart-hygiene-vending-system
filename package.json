@@ -11,6 +11,7 @@
     "test:profile-role-boundary": "pwsh -NoProfile -File scripts/test-profile-role-boundary.ps1",
     "test:restock-db": "pwsh -NoProfile -File scripts/test-restock-slot-db.ps1",
     "test:pin-rpc-db": "pwsh -NoProfile -File scripts/test-pin-rpc-db.ps1",
+    "test:operational-reads-db": "pwsh -NoProfile -File scripts/test-operational-reads-rls.ps1",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
