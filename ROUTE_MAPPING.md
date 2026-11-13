@@ -12,4 +12,4 @@
 | `?view=esp32_logs` | `/?view=esp32_logs` | `Esp32LogsView` |
 | `?view=settings` | `/?view=settings` | `SettingsView` |
 
-Legacy API paths are not routes in React. Their recovered behavior maps to direct Supabase queries/RPCs; 23 legacy API implementations are unavailable for exact comparison.
+Legacy API paths are not routes in React. Their recovered behavior maps to Supabase queries/RPCs. The JavaScript references 21 distinct PHP API endpoints; only 3 implementations are present, leaving 18 endpoint behaviors unavailable for exact comparison.

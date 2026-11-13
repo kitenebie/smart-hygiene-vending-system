@@ -256,24 +256,8 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_DRZfiimKuXLYdLvE-7iVxQ_yZLMr2OS
 
 ### 3. Initialize or Upgrade the Database
 1. Open the [Supabase SQL Editor](https://supabase.com/dashboard/project/fjexweubnccjrinhxrct/sql/new).
-2. For a new database, run [`001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql) first. Run [`002_mock_data.sql`](supabase/migrations/002_mock_data.sql) only when you need demo data; do not use its reset/seed statements on a production database.
-3. Then run every timestamped migration in this order:
-
-   ```text
-   20260910053637_firmware_connection.sql
-   20260911090000_enable_dashboard_realtime.sql
-   20260911100000_sms_outbox.sql
-   20260911110000_device_resource_telemetry.sql
-   20260911120000_authenticated_device_telemetry.sql
-   20260911130000_esp32_pin_connection_detection.sql
-   20260911140000_esp32_pin_devices.sql
-   20260912100000_esp32_realtime_heartbeat.sql
-   20260912110000_repair_device_health_telemetry.sql
-   20260915100000_esp32_event_logs.sql
-   20260915110000_slot_restock.sql
-   ```
-
-4. The last four migrations are required for accurate online/offline state, repairable health telemetry, ESP32 Logs, and the Add stock modal. Re-flash the ESP32 firmware after applying them.
+2. The complete [`ONE_TIME_SETUP.sql`](supabase/ONE_TIME_SETUP.sql) file includes the current legacy data and schema migrations. It does not drop tables or overwrite conflicting rows.
+3. Use it only in development/staging until the legacy migrations' RLS-disabled tables receive reviewed access policies. For an exact legacy snapshot, use a new/empty database; existing rows with matching keys are intentionally retained. Do not clear production tables to force a match.
 
 ### 4. Run Development Server
 ```powershell

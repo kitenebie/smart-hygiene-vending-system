@@ -6,6 +6,7 @@
   "scripts": {
     "firmware:configure": "node scripts/firmware-configure.mjs",
     "firmware:check": "node scripts/firmware-check.mjs",
+    "test:coin-reset": "node scripts/test-coin-reset.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",

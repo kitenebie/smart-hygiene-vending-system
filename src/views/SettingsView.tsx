@@ -5,6 +5,7 @@ import Switch from '../components/Switch';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../hooks/useAuth';
 import Esp32PinStatusModal from '../components/Esp32PinStatusModal';
+import { loadReportedCoinBalance, requestCoinBalanceReset } from '../utils/coinBalance';
 
 interface Slot { id: number; slot_code: string; product_name: string; capacity: number }
 interface MachineSettings {
@@ -51,6 +52,8 @@ export default function SettingsView() {
   const [wifiSsid, setWifiSsid] = useState('');
   const [wifiPassword, setWifiPassword] = useState('');
   const [wifiPasswordSet, setWifiPasswordSet] = useState(false);
+  const [coinBalance, setCoinBalance] = useState<number | null | undefined>();
+  const [resettingCoinBalance, setResettingCoinBalance] = useState(false);
 
   // Profile
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -66,8 +69,32 @@ export default function SettingsView() {
     void loadAll();
   }, []);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => { void loadCoinBalance(); }, 30000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   async function loadAll() {
-    await Promise.all([loadSlots(), loadSettings(), loadProfile()]);
+    await Promise.all([loadSlots(), loadSettings(), loadProfile(), loadCoinBalance()]);
+  }
+
+  async function loadCoinBalance() {
+    try { setCoinBalance(await loadReportedCoinBalance()); }
+    catch { setCoinBalance(undefined); }
+  }
+
+  async function resetCoinBalance() {
+    if (!window.confirm('Reset the machine coin balance to ₱0? This clears inserted credit on the next machine poll.')) return;
+    setResettingCoinBalance(true);
+    try {
+      await requestCoinBalanceReset();
+      showToast('Reset sent. The machine will clear coin credit on its next idle settings poll.');
+      void loadCoinBalance();
+    } catch {
+      showToast('Could not reset coin balance.', true);
+    } finally {
+      setResettingCoinBalance(false);
+    }
   }
 
   async function loadSlots() {
@@ -334,6 +361,14 @@ export default function SettingsView() {
             </div>
             <Switch on={autoReset} onChange={setAutoReset} />
           </div>
+
+          {admin?.role === 'Administrator' && <div className="field-row">
+            <div>
+              <div className="field-label">Coin balance on the machine</div>
+              <div className="field-hint">Zeros inserted coin credit for testing or a stuck coinslot. Last reported: {coinBalance === undefined ? 'unavailable' : coinBalance === null ? 'not reported yet' : `₱${coinBalance.toFixed(0)}`}</div>
+            </div>
+            <button className="btn reject" disabled={resettingCoinBalance} onClick={resetCoinBalance}>{resettingCoinBalance ? 'Sending…' : 'Reset to ₱0'}</button>
+          </div>}
 
           <div className="field-row">
             <div>

@@ -2,9 +2,9 @@ import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const database = process.argv[2] ?? '4peace_legacy_import_20261103';
+const database = process.argv[2] ?? '4peace_legacy_staging_20261113';
 const mysql = 'C:\\xampp\\mysql\\bin\\mysql.exe';
-const output = resolve('supabase/migrations/20261103010000_import_legacy_mysql_data.sql');
+const output = resolve('supabase/migrations/20261113002000_import_legacy_mysql_data.sql');
 const tables = [
   'admins', 'device_health', 'device_resource_logs', 'esp32_logs', 'esp32_pin_devices',
   'esp32_pin_status', 'slots', 'esp32_pin_device_assignments', 'gcash_payments',
@@ -30,6 +30,7 @@ sql += `CREATE TABLE IF NOT EXISTS public.supabase_sync_state (table_name text P
 for (const table of tables) {
   const quote = String.fromCharCode(96);
   const columns = query(`SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '${table}' ORDER BY ordinal_position`);
+  if (!columns.length) throw new Error(`No MySQL columns found for ${table} in ${database}`);
   const booleans = new Set(query(`SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '${table}' AND data_type = 'tinyint' AND column_type = 'tinyint(1)'`));
   const rows = query(`SELECT JSON_ARRAY(${columns.map(column => `${quote}${column}${quote}`).join(', ')}) FROM ${quote}${table}${quote}`);
   if (!rows.length) continue;

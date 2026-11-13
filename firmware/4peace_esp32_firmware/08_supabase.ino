@@ -214,6 +214,22 @@ bool httpFetchConfig() {
   tamperAlarmEnabled =
     obj["tamper_alarm_enabled"] | tamperAlarmEnabled;
 
+  const uint64_t requestedCreditReset = obj["credit_reset_token"] | uint64_t(0);
+  const uint64_t handledCreditReset = prefs.getULong64("creditReset", 0);
+  if (requestedCreditReset > handledCreditReset) {
+    currentCredit = 0.0f;
+    if (!persistCurrentCredit()) {
+      Serial.println("[CONFIG] Coin reset could not be saved; will retry.");
+      return false;
+    }
+    if (prefs.putULong64("creditReset", requestedCreditReset) != sizeof(uint64_t)) {
+      Serial.println("[CONFIG] Coin reset token could not be saved; will retry.");
+      return false;
+    }
+    updateLcd("Coin balance reset", "Credit P0");
+    logEsp32Event("coin_reset", "Admin reset coin credit to P0.00");
+  }
+
   bool previousPinDetection = pinConnectionDetectionEnabled;
   pinConnectionDetectionEnabled = obj["enable_pin_connection_detection"] | false;
   if (previousPinDetection && !pinConnectionDetectionEnabled) {

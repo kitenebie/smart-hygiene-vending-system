@@ -1,5 +1,7 @@
 -- 4Peace one-time Supabase setup.
--- Run only after clearing public tables. 002_mock_data.sql is intentionally excluded.
+-- Additive only: no tables are dropped and imported rows never overwrite existing rows.
+-- Demo seed rows and the superseded Nov 3 dump are excluded.
+-- Development/staging only for now: legacy migrations disable RLS on several app tables.
 
 -- ===== 001_initial_schema.sql =====
 
@@ -26,9 +28,6 @@ CREATE TABLE IF NOT EXISTS admins (
 -- Default admin credentials:
 -- Username: admin
 -- Password: 4peace2026
-INSERT INTO admins (username, password_hash, full_name, email, phone, role)
-VALUES ('admin', '4peace2026', 'Grace (Team 4Peace)', 'team4peace@veritas.edu.ph', '+63 900 000 0000', 'Administrator')
-ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- ------------------------------------------------------------
 -- Slots
@@ -42,13 +41,6 @@ CREATE TABLE IF NOT EXISTS slots (
   updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
-INSERT INTO slots (slot_code, product_name, stock, capacity) VALUES
-  ('S1', 'Slot 1', 20, 30),
-  ('S2', 'Slot 2', 20, 30),
-  ('S3', 'Slot 3', 20, 30),
-  ('S4', 'Slot 4', 20, 30),
-  ('S5', 'Slot 5', 20, 30)
-ON CONFLICT (slot_code) DO NOTHING;
 
 -- ------------------------------------------------------------
 -- Transactions
@@ -62,13 +54,6 @@ CREATE TABLE IF NOT EXISTS transactions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-INSERT INTO transactions (ref_code, method, slot_id, amount, created_at) VALUES
-  ('GC-88213', 'gcash', 1, 10.00, NOW() - INTERVAL '2 minutes'),
-  ('PLS-0417',  'coin',  4, 10.00, NOW() - INTERVAL '14 minutes'),
-  ('GC-88209', 'gcash', 5, 10.00, NOW() - INTERVAL '26 minutes'),
-  ('PLS-0416',  'coin',  2, 10.00, NOW() - INTERVAL '41 minutes'),
-  ('GC-88201', 'gcash', 3, 10.00, NOW() - INTERVAL '1 hour'),
-  ('PLS-0415',  'coin',  1, 10.00, NOW() - INTERVAL '1 hour');
 
 -- ------------------------------------------------------------
 -- Device health
@@ -86,9 +71,6 @@ CREATE TABLE IF NOT EXISTS device_health (
   last_sync                TIMESTAMPTZ DEFAULT NOW()
 );
 
-INSERT INTO device_health
-  (esp32_uptime_seconds, coin_pulses_session, sim800l_signal_pct, buck1_voltage, buck2_voltage, tamper_status, coin_box_pulses_total, coin_box_capacity_pulses)
-VALUES (570240, 41, 78, 5.02, 4.18, 'idle', 680, 1000);
 
 -- ------------------------------------------------------------
 -- Machine health logs
@@ -100,11 +82,6 @@ CREATE TABLE IF NOT EXISTS machine_health_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-INSERT INTO machine_health_logs (level, message, created_at) VALUES
-  ('warning',  'Slot S3 (Tampon — Regular) dropped below threshold (6 units left)', NOW() - INTERVAL '18 minutes'),
-  ('critical', 'Slot S5 (Sanitary Pad — Overnight) is now empty — SMS alert sent',  NOW() - INTERVAL '52 minutes'),
-  ('info',     'Coin box level check — 68% capacity, within normal range',           NOW() - INTERVAL '2 hours'),
-  ('info',     'Daily boot self-test passed — all sensors responding',               NOW() - INTERVAL '6 hours');
 
 -- ------------------------------------------------------------
 -- Machine settings
@@ -121,9 +98,6 @@ CREATE TABLE IF NOT EXISTS machine_settings (
   updated_at            TIMESTAMPTZ DEFAULT NOW()
 );
 
-INSERT INTO machine_settings
-  (unit_price, low_stock_threshold, coin_box_alert_pct, admin_sms_number, tamper_alarm_enabled, auto_reset_coin_count, device_api_key)
-VALUES (10.00, 5, 80, '+63 900 000 0000', TRUE, FALSE, '4peace-dev-key-2026');
 
 -- ------------------------------------------------------------
 -- GCash payments
@@ -138,10 +112,6 @@ CREATE TABLE IF NOT EXISTS gcash_payments (
   resolved_at TIMESTAMPTZ
 );
 
-INSERT INTO gcash_payments (ref_code, amount, slot_id, status, created_at, resolved_at) VALUES
-  ('GC-99231', 10.00, 3, 'pending',  NOW() - INTERVAL '3 minutes', NULL),
-  ('GC-88213', 10.00, 1, 'approved', NOW() - INTERVAL '40 minutes', NOW() - INTERVAL '38 minutes'),
-  ('GC-88190', 10.00, 5, 'rejected', NOW() - INTERVAL '2 hours',    NOW() - INTERVAL '2 hours');
 
 -- ------------------------------------------------------------
 -- Notifications
@@ -155,14 +125,6 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-INSERT INTO notifications (type, level, message, is_read, created_at) VALUES
-  ('gcash',    'info',     'New GCash reference GC-99231 submitted — awaiting your approval', FALSE, NOW() - INTERVAL '3 minutes'),
-  ('stock',    'warning',  'Slot S3 (Tampon — Regular) dropped below threshold (6 units left)', FALSE, NOW() - INTERVAL '18 minutes'),
-  ('gcash',    'info',     'GCash reference GC-88213 approved — dispense allowed', TRUE, NOW() - INTERVAL '38 minutes'),
-  ('stock',    'critical', 'Slot S5 (Sanitary Pad — Overnight) is now empty — SMS alert sent', TRUE, NOW() - INTERVAL '52 minutes'),
-  ('gcash',    'warning',  'GCash reference GC-88190 rejected — no matching SMS found', TRUE, NOW() - INTERVAL '2 hours'),
-  ('coin_box', 'info',     'Coin box level check — 68% capacity, within normal range', TRUE, NOW() - INTERVAL '2 hours'),
-  ('system',   'info',     'Daily boot self-test passed — all sensors responding', TRUE, NOW() - INTERVAL '6 hours');
 
 -- ============================================================
 -- Row Level Security & Permissions
@@ -918,14 +880,6 @@ NOTIFY pgrst, 'reload schema';
 
 -- ===== 20260912110000_repair_device_health_telemetry.sql =====
 
--- Repairs telemetry after device_health was emptied/reset.
--- The ESP32 uses DEVICE_HEALTH_ID = 1, so retain that record and make the
--- telemetry RPC recreate it automatically if an administrator clears the table.
-
-INSERT INTO public.device_health (id)
-VALUES (1)
-ON CONFLICT (id) DO NOTHING;
-
 CREATE OR REPLACE FUNCTION public.sync_device_telemetry(
   p_device_key text,
   p_machine_id text,
@@ -1183,7 +1137,70 @@ ALTER TABLE public.machine_settings
   ADD CONSTRAINT machine_settings_wifi_password_length CHECK (wifi_password IS NULL OR char_length(wifi_password) <= 63);
 
 
--- ===== 20261103010000_import_legacy_mysql_data.sql =====
+-- ===== 20261113000000_legacy_schema_delta.sql =====
+
+-- Preserve fields present in the Nov 12 MySQL snapshot.
+ALTER TABLE public.machine_settings
+  ADD COLUMN IF NOT EXISTS wifi_ssid text,
+  ADD COLUMN IF NOT EXISTS wifi_password text,
+  ADD COLUMN IF NOT EXISTS credit_reset_token bigint NOT NULL DEFAULT 0;
+
+ALTER TABLE public.gcash_payments
+  ADD COLUMN IF NOT EXISTS "Notes" varchar(255) NOT NULL DEFAULT '';
+
+NOTIFY pgrst, 'reload schema';
+
+
+-- ===== 20261113001000_coin_balance_reset_rpc.sql =====
+
+CREATE OR REPLACE FUNCTION public.request_coin_balance_reset()
+RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  settings_id integer;
+  next_token bigint;
+  reset_message text := 'Coin balance reset requested — the machine will set inserted credit to ₱0';
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'Administrator'
+  ) THEN
+    RAISE EXCEPTION 'Administrator access required.' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT id, credit_reset_token
+  INTO settings_id, next_token
+  FROM public.machine_settings
+  ORDER BY id DESC
+  LIMIT 1
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Machine settings not found.' USING ERRCODE = 'P0002';
+  END IF;
+
+  next_token := next_token + 1;
+  UPDATE public.machine_settings
+  SET credit_reset_token = next_token, updated_at = now()
+  WHERE id = settings_id;
+
+  INSERT INTO public.notifications (type, level, message)
+  VALUES ('system', 'info', reset_message);
+
+  RETURN next_token;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.request_coin_balance_reset() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.request_coin_balance_reset() TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+
+-- ===== 20261113002000_import_legacy_mysql_data.sql =====
 
 -- Generated from Php_Version/4peace.sql via scripts/export-legacy-mysql-to-supabase.mjs
 -- Additive import: existing Supabase rows are never updated or deleted.
@@ -1191,7 +1208,7 @@ ALTER TABLE public.machine_settings
 CREATE TABLE IF NOT EXISTS public.supabase_sync_state (table_name text PRIMARY KEY, last_id bigint NOT NULL DEFAULT 0);
 
 INSERT INTO public."admins" ("id", "username", "password_hash", "full_name", "email", "phone", "role", "last_login", "created_at") VALUES
-(1, 'admin', '$2y$10$BLT5MhHMT8SwwctDBvgf0.KmluQpSXfnu90CsrigECOATgCHbs28K', 'Grace (Team 4Peace)', 'team4peace@veritas.edu.ph', '+63 900 000 0000', 'Administrator', '2026-10-18 10:10:09', '2026-09-10 11:03:50')
+(1, 'admin', '$2y$10$BLT5MhHMT8SwwctDBvgf0.KmluQpSXfnu90CsrigECOATgCHbs28K', 'Grace (Team 4Peace)', 'team4peace@veritas.edu.ph', '+63 900 000 0000', 'Administrator', '2026-11-06 00:48:59', '2026-09-10 11:03:50')
 ON CONFLICT DO NOTHING;
 
 SELECT setval(pg_get_serial_sequence('public.admins', 'id'), COALESCE((SELECT MAX(id) FROM public."admins"), 1), true);
@@ -6912,20 +6929,20 @@ INSERT INTO public."esp32_pin_device_assignments" ("machine_id", "gpio", "device
 ('VM001', 39, 10, '2026-09-11 02:34:30')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO public."gcash_payments" ("id", "ref_code", "amount", "slot_id", "status", "created_at", "resolved_at", "consumed_at") VALUES
-(1, 'GC-99301', 10, 1, 'approved', '2026-09-10 02:21:12', '2026-09-11 07:35:41', NULL),
-(2, 'GC-99298', 10, 4, 'approved', '2026-09-10 02:13:12', '2026-09-10 03:47:20', NULL),
-(3, 'GC-99245', 10, 1, 'approved', '2026-09-10 02:15:12', '2026-09-10 02:17:12', NULL),
-(4, 'GC-99238', 10, 4, 'approved', '2026-09-10 01:30:12', '2026-09-10 01:33:12', NULL),
-(5, 'GC-99230', 10, 1, 'approved', '2026-09-10 00:17:12', '2026-09-10 00:20:12', NULL),
-(6, 'GC-99180', 10, 3, 'rejected', '2026-09-09 22:55:12', '2026-09-09 23:00:12', NULL),
-(7, 'GC-99142', 10, 2, 'rejected', '2026-09-09 21:15:12', '2026-09-09 21:20:12', NULL),
-(8, 'GC-4PEACE-1789708442', 10, 1, 'approved', '2026-09-18 05:14:03', '2026-09-18 05:14:02', '2026-09-18 05:14:04'),
-(9, 'GC-HACK-1789708871952895336', 10, 1, 'approved', '2026-09-18 05:21:12', '2026-09-18 05:21:11', '2026-09-18 05:21:12'),
-(10, '09946203199', 10, 2, 'approved', '2026-10-08 15:02:08', '2026-10-09 06:22:12', NULL),
-(13, '09240770861', 10, 1, 'approved', '2026-10-09 05:42:57', '2026-10-09 06:22:10', NULL),
-(17, '4045929886537', 10, 1, 'approved', '2026-10-09 06:11:37', '2026-10-09 06:21:39', NULL),
-(20, '4045939922138', 10, 1, 'approved', '2026-10-09 10:49:06', '2026-10-09 10:49:13', '2026-10-09 10:49:55')
+INSERT INTO public."gcash_payments" ("id", "ref_code", "amount", "slot_id", "status", "Notes", "created_at", "resolved_at", "consumed_at") VALUES
+(1, 'GC-99301', 10, 1, 'approved', '', '2026-09-10 02:21:12', '2026-09-11 07:35:41', NULL),
+(2, 'GC-99298', 10, 4, 'approved', '', '2026-09-10 02:13:12', '2026-09-10 03:47:20', NULL),
+(3, 'GC-99245', 10, 1, 'approved', '', '2026-09-10 02:15:12', '2026-09-10 02:17:12', NULL),
+(4, 'GC-99238', 10, 4, 'approved', '', '2026-09-10 01:30:12', '2026-09-10 01:33:12', NULL),
+(5, 'GC-99230', 10, 1, 'approved', '', '2026-09-10 00:17:12', '2026-09-10 00:20:12', NULL),
+(6, 'GC-99180', 10, 3, 'rejected', '', '2026-09-09 22:55:12', '2026-09-09 23:00:12', NULL),
+(7, 'GC-99142', 10, 2, 'rejected', '', '2026-09-09 21:15:12', '2026-09-09 21:20:12', NULL),
+(8, 'GC-4PEACE-1789708442', 10, 1, 'approved', '', '2026-09-18 05:14:03', '2026-09-18 05:14:02', '2026-09-18 05:14:04'),
+(9, 'GC-HACK-1789708871952895336', 10, 1, 'approved', '', '2026-09-18 05:21:12', '2026-09-18 05:21:11', '2026-09-18 05:21:12'),
+(10, '09946203199', 10, 2, 'approved', '', '2026-10-08 15:02:08', '2026-10-09 06:22:12', NULL),
+(13, '09240770861', 10, 1, 'approved', '', '2026-10-09 05:42:57', '2026-10-09 06:22:10', NULL),
+(17, '4045929886537', 10, 1, 'approved', '', '2026-10-09 06:11:37', '2026-10-09 06:21:39', NULL),
+(20, '4045939922138', 10, 1, 'approved', '', '2026-10-09 10:49:06', '2026-10-09 10:49:13', '2026-10-09 10:49:55')
 ON CONFLICT DO NOTHING;
 
 SELECT setval(pg_get_serial_sequence('public.gcash_payments', 'id'), COALESCE((SELECT MAX(id) FROM public."gcash_payments"), 1), true);
@@ -6986,8 +7003,8 @@ ON CONFLICT DO NOTHING;
 
 SELECT setval(pg_get_serial_sequence('public.machine_health_logs', 'id'), COALESCE((SELECT MAX(id) FROM public."machine_health_logs"), 1), true);
 
-INSERT INTO public."machine_settings" ("id", "unit_price", "low_stock_threshold", "coin_box_alert_pct", "admin_sms_number", "tamper_alarm_enabled", "auto_reset_coin_count", "device_api_key", "updated_at", "enable_pin_connection_detection") VALUES
-(1, 10, 5, 80, '+639092027875', true, false, '4peace-esp32-live-token-2026', '2026-09-10 02:25:12', false)
+INSERT INTO public."machine_settings" ("id", "unit_price", "low_stock_threshold", "coin_box_alert_pct", "admin_sms_number", "tamper_alarm_enabled", "auto_reset_coin_count", "device_api_key", "updated_at", "enable_pin_connection_detection", "wifi_ssid", "wifi_password", "credit_reset_token") VALUES
+(1, 10, 5, 80, '+639092027875', true, false, '4peace-esp32-live-token-2026', '2026-09-10 02:25:12', false, NULL, NULL, 0)
 ON CONFLICT DO NOTHING;
 
 SELECT setval(pg_get_serial_sequence('public.machine_settings', 'id'), COALESCE((SELECT MAX(id) FROM public."machine_settings"), 1), true);

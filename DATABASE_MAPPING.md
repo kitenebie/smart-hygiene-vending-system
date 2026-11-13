@@ -1,6 +1,6 @@
 # Legacy MySQL → Supabase mapping
 
-The current source is `Php_Version/4peace_db.sql`, a 2026-11-12 phpMyAdmin dump with 15 tables. The current React migrations cover the main dashboard/firmware tables, but the generated data import still comes from the older dump snapshot.
+The current source is `Php_Version/4peace_db.sql`, a 2026-11-12 phpMyAdmin dump with 15 tables. It was imported into the isolated XAMPP database `4peace_legacy_staging_20261113`; generated PostgreSQL data is in `supabase/migrations/20261113002000_import_legacy_mysql_data.sql` and included in `supabase/ONE_TIME_SETUP.sql`.
 
 | MySQL table | Supabase table | React use / current gap |
 |---|---|---|
@@ -25,6 +25,6 @@ The current source is `Php_Version/4peace_db.sql`, a 2026-11-12 phpMyAdmin dump 
 - `gcash_payments.Notes`
 - `machine_settings.wifi_ssid`
 - `machine_settings.wifi_password`
-- `machine_settings.credit_reset_token INT NOT NULL DEFAULT 0`
+- `machine_settings.credit_reset_token BIGINT NOT NULL DEFAULT 0` (range-preserving conversion for the legacy integer token)
 
-React already has an additive migration for the Wi-Fi fields. It still needs an additive migration for `credit_reset_token`; import/consolidated SQL must be regenerated using the latest dump. Keep `002_mock_data.sql` out of production/setup SQL because it truncates tables and disables RLS.
+The additive schema migration is `20261113000000_legacy_schema_delta.sql`; the reset RPC is `20261113001000_coin_balance_reset_rpc.sql`. The consolidated SQL excludes demo seeds and the superseded Nov 3 import. Data inserts use `ON CONFLICT DO NOTHING`: they preserve existing Supabase rows, so matching legacy IDs are not overwritten.

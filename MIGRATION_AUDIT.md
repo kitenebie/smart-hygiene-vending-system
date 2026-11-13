@@ -10,7 +10,7 @@ Current source checked: 2026-11-13. `Php_Version` is the reference; no PHP sourc
 - `includes/functions.php`, `includes/supabase_sync.php`
 - `4peace_db.sql` (phpMyAdmin dump generated 2026-11-12)
 
-The previous `4peace.sql` dump was replaced by `4peace_db.sql`. Both describe the same 15 tables. Compared with the previous dump, the current schema adds `gcash_payments.Notes` and `machine_settings.wifi_ssid`, `wifi_password`, and `credit_reset_token`. The latter is `INT NOT NULL DEFAULT 0`. The SQL data snapshot was refreshed; exact row-by-row data deltas have not been calculated.
+The previous `4peace.sql` dump was replaced by `4peace_db.sql`. Both describe the same 15 tables. The Nov 12 dump adds `gcash_payments.Notes` and `machine_settings.wifi_ssid`, `wifi_password`, and `credit_reset_token`. It was imported into isolated XAMPP staging database `4peace_legacy_staging_20261113`; table counts and generated SQL are recorded in `TEST_CHECKLIST.md`. The original database was left untouched.
 
 ## Latest PHP changes
 
@@ -23,9 +23,7 @@ The previous `4peace.sql` dump was replaced by `4peace_db.sql`. Both describe th
 
 ## PHP ↔ React status
 
-React has equivalents for all eight PHP dashboard views: Overview, Slots, Transactions, Device Health, Notifications, SMS Logs, ESP32 Logs, and Settings. Wi-Fi SSID/password controls are already implemented in React with the `20261103005000_machine_wifi_settings.sql` migration.
-
-The newly added coin-balance reset UI/status is not present in React. No Supabase migration currently defines `machine_settings.credit_reset_token`, and the current firmware contains no consumer for that token; the PHP notice alone does not prove the physical reset works.
+React has equivalents for all eight dashboard views and uses React Router query parameters for the active view. Wi-Fi settings and the latest PHP coin-balance reset flow now have React/Supabase equivalents. The reset schema/RPC passed an isolated PostgreSQL test and the firmware token path passed static checks, but neither has been applied/verified against the linked Supabase project or physical ESP32.
 
 The SQL dump has a `Notes` column on `gcash_payments`, but neither the current PHP UI JavaScript nor React renders/uses it. Preserve it in the data model if its values matter; no frontend behavior is evidenced.
 
@@ -37,6 +35,8 @@ React login currently requires email, per the latest request. The PHP settings t
 
 The supplied PHP tree also lacks `includes/auth_check.php`, `config/db.php`, and `logout.php`, all referenced by the dashboard/API flow. Therefore the PHP app cannot currently run end-to-end under XAMPP, and the missing server validation/authorization rules cannot be checked against the React implementation.
 
-## Data/import status
+## Data/import status and remaining gaps
 
-The existing generated `supabase/ONE_TIME_SETUP.sql` and import generator were built from the earlier XAMPP snapshot. They have not been regenerated from the new `4peace_db.sql`; they do not yet prove the current dump’s schema/data is represented in Supabase. The destructive `002_mock_data.sql` must stay excluded.
+The import generator and `supabase/ONE_TIME_SETUP.sql` now use the isolated Nov 12 dump, preserve IDs, convert booleans, exclude demo seeds/the superseded dump, and use `ON CONFLICT DO NOTHING`. The full bundle passed on fresh local PostgreSQL 17 with minimal Supabase Auth/Realtime fixtures and the 15 source-table counts matched. The actual React `loadReportedCoinBalance()` helper returned a finite value from live Supabase. Read-only live checks confirm `machine_settings.credit_reset_token` and `gcash_payments.Notes` are absent; the reset RPC cannot run on the live schema until migrations are applied. The legacy migration set disables RLS on multiple app tables, so the bundle is development/staging only until table access policies are reviewed and implemented.
+
+The React project currently uses TypeScript/TSX although the migration brief requested JavaScript/JSX. The linked Supabase account returned HTTP 403 for migration listing, while read-only API access is available; no remote schema or data was changed. Anonymous `select=*&limit=0` requests returned HTTP 200 for 15 app tables, confirming the live legacy RLS gap; `admins` returned 401 and `profiles` was filtered. PHP cannot run end-to-end because its auth/database/logout dependencies are absent. The remaining PHP backend behavior and visual parity therefore cannot be verified exactly.

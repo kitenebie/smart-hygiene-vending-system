@@ -6,6 +6,8 @@ import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { supabase } from '../utils/supabase';
 import { formatUptime, timeAgo, levelMeta } from '../utils/helpers';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../hooks/useAuth';
+import { requestCoinBalanceReset } from '../utils/coinBalance';
 
 interface Metric { name: string; value: string; pct: number; status: 'ok' | 'warn' | 'crit' | 'accent' }
 interface LogEntry { level: 'info' | 'warning' | 'critical'; text: string; time: string }
@@ -109,9 +111,24 @@ export default function HealthView() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [resources, setResources] = useState<ResourceSample[]>([]);
   const { showToast } = useToast();
+  const { admin } = useAuth();
+  const [resettingCoinBalance, setResettingCoinBalance] = useState(false);
 
   usePolling(load);
   useRealtimeRefresh(['device_health', 'device_resource_logs', 'machine_health_logs'], load);
+
+  async function resetCoinBalance() {
+    if (!window.confirm('Reset the machine coin balance to ₱0? This clears inserted credit on the next machine poll.')) return;
+    setResettingCoinBalance(true);
+    try {
+      await requestCoinBalanceReset();
+      showToast('Reset sent. The machine will clear coin credit on its next idle settings poll.');
+    } catch {
+      showToast('Could not reset coin balance.', true);
+    } finally {
+      setResettingCoinBalance(false);
+    }
+  }
 
   async function load() {
     try {
@@ -201,7 +218,7 @@ export default function HealthView() {
   return (
     <div>
       <div className="panel">
-        <div className="panel-head"><div><div className="panel-title display">Device health</div><div className="panel-title-sub">Live readings from onboard sensors</div></div></div>
+        <div className="panel-head"><div><div className="panel-title display">Device health</div><div className="panel-title-sub">Live readings from onboard sensors</div></div>{admin?.role === 'Administrator' && <button type="button" className="btn reject" disabled={resettingCoinBalance} onClick={resetCoinBalance}>{resettingCoinBalance ? 'Sending…' : 'Reset coin balance'}</button>}</div>
         <div className="health-grid">
           {metrics.map(metric => {
             const color = statusColor(metric.status);
