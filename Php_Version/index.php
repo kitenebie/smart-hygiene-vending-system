@@ -190,6 +190,7 @@ if (!is_string($activeView) || !isset($viewTitles[$activeView])) $activeView = '
               <div class="panel-title display">Device health</div>
               <div class="panel-title-sub">Live readings from onboard sensors</div>
             </div>
+            <button type="button" class="btn reject" data-reset-credit>Reset coin balance</button>
           </div>
           <div class="health-grid" id="healthGrid"></div>
         </div>
@@ -334,6 +335,13 @@ if (!is_string($activeView) || !isset($viewTitles[$activeView])) $activeView = '
             <div class="field-row">
               <div><div class="field-label">Auto-reset coin count</div><div class="field-hint">Resets running total after admin pickup</div></div>
               <div class="switch off" id="setAutoReset"></div>
+            </div>
+            <div class="field-row">
+              <div>
+                <div class="field-label">Coin balance on the machine</div>
+                <div class="field-hint">Zeros inserted coin credit (for testing or a stuck coinslot). Last reported: <span id="creditResetValue">—</span></div>
+              </div>
+              <button type="button" class="btn reject" data-reset-credit>Reset to ₱0</button>
             </div>
             <div class="field-row">
               <div><div class="field-label">Enable ESP32 PIN Connection Detection</div><div class="field-hint">Temporarily probes relay and buzzer connections only while this switch is on.</div></div>

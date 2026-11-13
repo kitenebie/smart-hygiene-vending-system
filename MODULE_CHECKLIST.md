@@ -1,19 +1,22 @@
-# Module checklist
+# PHP ↔ React module parity
 
-| Module | Legacy evidence | React/Supabase status | Verification |
-|---|---|---|---|
-| Login/logout | `index.php`; missing auth include | UI exists; must replace local-storage authentication | blocked by Auth migration |
-| Overview/analytics | `app.js` `overview.php` | implemented in `OverviewView` | build only |
-| Slots/restock | `slots.php`, `slot_restock.php` calls | implemented with `restock_slot` RPC | SQL test exists; database unverified |
-| Transactions/export | `transactions.php` call | implemented with CSV export | build only |
-| GCash approvals | pending/approve API calls | implemented | database unverified |
-| Device health | `health.php` call | implemented with telemetry resources | build only |
-| Notifications | read/list API calls | implemented | database unverified |
-| SMS logs | `sms_logs.php` call | implemented | build only |
-| ESP32 logs | `esp32_logs.php` call | implemented | build only |
-| ESP32 pin tools | pin API calls | implemented with RPC/table reads | database unverified |
-| Settings/profile | supplied settings APIs | implemented; security migration required | database unverified |
-| File storage/uploads | none found | not applicable | n/a |
-| Reports/printing | CSV export only found | implemented | build only |
+| PHP page/module | React equivalent | Current parity/gap |
+|---|---|---|
+| Login/session | `LoginPage`, `AuthProvider` | React uses Supabase Auth email/password; PHP auth files are missing. Email-only follows latest user direction. |
+| Overview/analytics | `OverviewView` | UI/data path exists; PHP endpoint source missing. |
+| Slots/inventory/restock | `SlotsView` | UI and `restock_slot` RPC exist; exact PHP endpoint validation unavailable. |
+| Transactions/GCash approval/export | `TransactionsView` | Listing, approve/reject, CSV exist; PHP API source missing. |
+| Device Health | `HealthView` | Telemetry/history UI exists; new PHP coin reset button/status is missing. |
+| Notifications/read-all | `NotificationsView` | UI/actions exist; PHP API source missing. |
+| SMS logs | `SmsLogsView` | UI exists; PHP API source missing. |
+| ESP32 logs | `Esp32LogsView` | UI exists; PHP API source missing. |
+| ESP32 PIN status, assignment, device catalog | Settings + `Esp32PinStatusModal` | UI and RPC-backed actions exist; PHP endpoint source missing. |
+| Product/slot settings | `SettingsView` | Product name/capacity controls exist. |
+| Machine settings | `SettingsView` | Wi-Fi SSID/password and other fields exist; `credit_reset_token` is missing. |
+| Admin profile/logout | `SettingsView`, Supabase Auth | Profile UI exists; PHP profile/auth source missing; React uses Auth-managed email/password. |
+| Coin-balance reset | None | Missing from React; Supabase column and firmware token consumer also missing. |
+| `gcash_payments.Notes` | None | No use found in either frontend; migrate data column only unless intended behavior is identified. |
+| MySQL ↔ Supabase sync fallback | None | React queries Supabase directly; legacy sync API implementation is missing. |
+| CSV export | `TransactionsView` | Present. |
 
-No module is marked source-verified because 23 referenced PHP endpoints are missing from the supplied legacy directory.
+PHP nav has eight dashboard views and React has all eight. This is not complete behavioral parity: coin-balance reset, current dump import, live DB verification, and missing PHP backend behavior remain open.

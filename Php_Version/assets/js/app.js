@@ -325,6 +325,7 @@ async function resolveGcash(id, action) {
 
 // ---------- HEALTH ----------
 async function loadHealth() {
+  loadCreditResetStatus();
   try {
     const d = await api('api/health.php');
     const grid = document.getElementById('healthGrid');
@@ -697,6 +698,7 @@ async function loadSettings() {
     setSwitch('setTamper', d.machine.tamper_alarm_enabled);
     setSwitch('setAutoReset', d.machine.auto_reset_coin_count);
     setSwitch('setPinDetection', d.machine.enable_pin_connection_detection);
+    loadCreditResetStatus();
   } catch (e) {
     toast('Could not load settings: ' + e.message, true);
   }
@@ -874,6 +876,34 @@ document.getElementById('setPinDetection').addEventListener('click', async event
 document.getElementById('saveMachineBtn').addEventListener('click', saveMachineSettings);
 document.getElementById('saveProfileBtn').addEventListener('click', saveProfile);
 document.getElementById('markReadBtn').addEventListener('click', markAllNotifsRead);
+
+async function loadCreditResetStatus() {
+  const label = document.getElementById('creditResetValue');
+  if (!label) return;
+  try {
+    const d = await api('api/credit_reset.php');
+    label.textContent = d.current_credit == null ? 'not reported yet' : ('₱' + Number(d.current_credit).toFixed(0));
+  } catch (e) {
+    label.textContent = 'unavailable';
+  }
+}
+
+async function resetCoinBalance() {
+  if (!window.confirm('Reset the machine coin balance to ₱0? This clears inserted credit on the next machine poll.')) {
+    return;
+  }
+  try {
+    const d = await api('api/credit_reset.php', { method: 'POST', body: JSON.stringify({}) });
+    toast(d.message || 'Coin balance reset sent.');
+    loadCreditResetStatus();
+  } catch (e) {
+    toast(e.message || 'Could not reset coin balance.', true);
+  }
+}
+
+document.querySelectorAll('[data-reset-credit]').forEach(btn => {
+  btn.addEventListener('click', resetCoinBalance);
+});
 
 // initial load
 refreshFromBackup(activeView);

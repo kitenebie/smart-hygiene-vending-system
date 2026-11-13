@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/functions.php';
+
 function fetch_supabase_rows(string $table, array $columns, ?int $afterId = null, string $orderColumn = 'id'): array
 {
     $env = is_file(__DIR__ . '/../.env') ? parse_ini_file(__DIR__ . '/../.env', false, INI_SCANNER_RAW) : [];
@@ -110,6 +112,7 @@ function sync_supabase_to_mysql(PDO $pdo): array
     if (!$pdo->query("SHOW COLUMNS FROM machine_settings LIKE 'wifi_password'")->fetch()) {
         $pdo->exec('ALTER TABLE machine_settings ADD wifi_password VARCHAR(64) DEFAULT NULL');
     }
+    ensure_credit_reset_column($pdo);
     if (!$pdo->query("SHOW COLUMNS FROM gcash_payments LIKE 'consumed_at'")->fetch()) {
         $pdo->exec('ALTER TABLE gcash_payments ADD consumed_at DATETIME DEFAULT NULL');
     }
@@ -155,7 +158,7 @@ function sync_supabase_to_mysql(PDO $pdo): array
     ) ENGINE=InnoDB");
     $tables = [
         'slots' => [['id','slot_code','product_name','stock','capacity','updated_at'], false],
-        'machine_settings' => [['id','unit_price','low_stock_threshold','coin_box_alert_pct','admin_sms_number','tamper_alarm_enabled','auto_reset_coin_count','enable_pin_connection_detection','device_api_key','wifi_ssid','wifi_password','updated_at'], false],
+        'machine_settings' => [['id','unit_price','low_stock_threshold','coin_box_alert_pct','admin_sms_number','tamper_alarm_enabled','auto_reset_coin_count','enable_pin_connection_detection','device_api_key','wifi_ssid','wifi_password','credit_reset_token','updated_at'], false],
         'device_health' => [['id','esp32_uptime_seconds','coin_pulses_session','sim800l_signal_pct','buck1_voltage','buck2_voltage','tamper_status','coin_box_pulses_total','coin_box_capacity_pulses','last_sync'], false],
         'transactions' => [['id','ref_code','method','slot_id','amount','created_at'], true],
         'machine_health_logs' => [['id','level','message','created_at'], true],
@@ -186,7 +189,7 @@ function sync_supabase_to_mysql(PDO $pdo): array
             }
             $columns = array_values(array_filter(
                 $columns,
-                static fn(string $column): bool => $column !== 'wifi_ssid' && $column !== 'wifi_password'
+                static fn(string $column): bool => !in_array($column, ['wifi_ssid', 'wifi_password', 'credit_reset_token'], true)
             ));
             $rows = fetch_supabase_rows($table, $columns, $lastId);
         }
