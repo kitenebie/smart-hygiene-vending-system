@@ -119,6 +119,10 @@ INSERT INTO public.slots VALUES
   (5, 'S5', 'Tea', 12, 30);
 INSERT INTO public.gcash_payments (ref_code, amount, slot_id, status)
 VALUES ('GC-TEST-01', 14.5, 2, 'approved');
+INSERT INTO public.transactions (ref_code, method, slot_id, amount)
+VALUES ('TX-TEST-READ', 'coin', 1, 14.5);
+INSERT INTO public.machine_health_logs (level, message) VALUES ('info', 'Test health log');
+INSERT INTO public.notifications (type, level, message) VALUES ('system', 'info', 'Test notification');
 '@ | Set-Content -LiteralPath $fixturePath -Encoding utf8
   & $psql @pgArgs -f $fixturePath | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Fixture setup failed' }
@@ -126,6 +130,126 @@ VALUES ('GC-TEST-01', 14.5, 2, 'approved');
   $repoRoot = Split-Path -Parent $PSScriptRoot
   & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\migrations\20260910053637_firmware_connection.sql') | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Firmware vend RPC migration failed' }
+  & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\migrations\20261113006600_transactions_role_read.sql') | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Transactions role-read migration failed' }
+  & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\migrations\20261113006700_health_notification_read_rls.sql') | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Health/notification read-RLS migration failed' }
+  & $psql @pgArgs -c @'
+DO $$ BEGIN
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.transactions'::regclass) THEN RAISE EXCEPTION 'transactions RLS is disabled'; END IF;
+  IF has_table_privilege('anon', 'public.transactions', 'SELECT') OR has_table_privilege('anon', 'public.transactions', 'INSERT') THEN RAISE EXCEPTION 'anon retains transaction access'; END IF;
+  IF NOT has_table_privilege('authenticated', 'public.transactions', 'SELECT') OR has_table_privilege('authenticated', 'public.transactions', 'INSERT') THEN RAISE EXCEPTION 'authenticated transaction grants are incorrect'; END IF;
+  IF NOT (SELECT prosecdef FROM pg_proc WHERE oid = 'public.complete_vend(text,text,text,text,text,bigint,numeric)'::regprocedure) THEN RAISE EXCEPTION 'complete_vend must use definer rights with transaction RLS'; END IF;
+END $$;
+'@ | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Transactions migration privilege checks failed' }
+  & $psql @pgArgs -c @'
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+DO $$ DECLARE row_count integer; BEGIN
+  SELECT count(*) INTO row_count FROM public.transactions;
+  IF row_count <> 1 THEN RAISE EXCEPTION 'authorized profile cannot read transaction history'; END IF;
+END $$;
+ROLLBACK;
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '22222222-2222-4222-8222-222222222222';
+DO $$ DECLARE row_count integer; BEGIN
+  SELECT count(*) INTO row_count FROM public.transactions;
+  IF row_count <> 1 THEN RAISE EXCEPTION 'technician profile cannot read transaction history'; END IF;
+END $$;
+ROLLBACK;
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '33333333-3333-4333-8333-333333333333';
+DO $$ DECLARE row_count integer; BEGIN
+  SELECT count(*) INTO row_count FROM public.transactions;
+  IF row_count <> 0 THEN RAISE EXCEPTION 'unprofiled user can read transaction history'; END IF;
+END $$;
+ROLLBACK;
+BEGIN;
+SET LOCAL ROLE anon;
+DO $$ DECLARE result jsonb; BEGIN
+  BEGIN PERFORM id FROM public.transactions;
+    RAISE EXCEPTION 'anon transaction read unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN INSERT INTO public.transactions (ref_code, method, slot_id, amount) VALUES ('TX-ANON', 'coin', 1, 14.5);
+    RAISE EXCEPTION 'anon transaction insert unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  result := public.complete_vend('test-device-key', 'tx-rls-vend-0001', 'VM001', '', 'coin', 1, 14.5);
+  IF result->>'success' <> 'true' THEN RAISE EXCEPTION 'device vend RPC failed under transaction RLS: %', result; END IF;
+END $$;
+ROLLBACK;
+'@ | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Transactions RLS behavior checks failed' }
+  & $psql @pgArgs -c @'
+DO $$ BEGIN
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.machine_health_logs'::regclass) OR NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.notifications'::regclass) THEN RAISE EXCEPTION 'health/notification RLS is disabled'; END IF;
+  IF has_table_privilege('anon', 'public.machine_health_logs', 'SELECT') OR has_table_privilege('anon', 'public.notifications', 'SELECT') THEN RAISE EXCEPTION 'anon retains health/notification reads'; END IF;
+  IF NOT has_column_privilege('anon', 'public.machine_health_logs', 'level', 'INSERT') OR NOT has_column_privilege('anon', 'public.notifications', 'is_read', 'INSERT') THEN RAISE EXCEPTION 'firmware insert grants are missing'; END IF;
+  IF has_table_privilege('anon', 'public.notifications', 'UPDATE') OR has_table_privilege('anon', 'public.machine_health_logs', 'DELETE') THEN RAISE EXCEPTION 'anon retains unintended health/notification writes'; END IF;
+  IF NOT has_column_privilege('authenticated', 'public.notifications', 'is_read', 'UPDATE') OR has_column_privilege('authenticated', 'public.notifications', 'message', 'UPDATE') THEN RAISE EXCEPTION 'notification update grants are incorrect'; END IF;
+END $$;
+'@ | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Health/notification RLS privilege checks failed' }
+  & $psql @pgArgs -c @'
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+DO $$ DECLARE row_count integer; BEGIN
+  SELECT count(*) INTO row_count FROM public.machine_health_logs;
+  IF row_count <> 1 THEN RAISE EXCEPTION 'administrator cannot read health logs'; END IF;
+  SELECT count(*) INTO row_count FROM public.notifications;
+  IF row_count <> 1 THEN RAISE EXCEPTION 'administrator cannot read notifications'; END IF;
+  UPDATE public.notifications SET is_read = true WHERE message = 'Test notification';
+  IF NOT FOUND THEN RAISE EXCEPTION 'administrator cannot mark notification read'; END IF;
+  INSERT INTO public.notifications (type, level, message) VALUES ('system', 'info', 'App notification');
+END $$;
+ROLLBACK;
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '22222222-2222-4222-8222-222222222222';
+DO $$ DECLARE row_count integer; BEGIN
+  SELECT count(*) INTO row_count FROM public.machine_health_logs;
+  IF row_count <> 1 THEN RAISE EXCEPTION 'technician cannot read health logs'; END IF;
+  SELECT count(*) INTO row_count FROM public.notifications;
+  IF row_count <> 1 THEN RAISE EXCEPTION 'technician cannot read notifications'; END IF;
+END $$;
+ROLLBACK;
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '33333333-3333-4333-8333-333333333333';
+DO $$ DECLARE row_count integer; BEGIN
+  SELECT count(*) INTO row_count FROM public.machine_health_logs;
+  IF row_count <> 0 THEN RAISE EXCEPTION 'unprofiled user can read health logs'; END IF;
+  SELECT count(*) INTO row_count FROM public.notifications;
+  IF row_count <> 0 THEN RAISE EXCEPTION 'unprofiled user can read notifications'; END IF;
+END $$;
+ROLLBACK;
+BEGIN;
+SET LOCAL ROLE anon;
+DO $$ BEGIN
+  BEGIN PERFORM id FROM public.machine_health_logs;
+    RAISE EXCEPTION 'anon health-log read unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN PERFORM id FROM public.notifications;
+    RAISE EXCEPTION 'anon notification read unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  INSERT INTO public.machine_health_logs (level, message) VALUES ('warning', 'Firmware REST insert test');
+  INSERT INTO public.notifications (type, level, message, is_read) VALUES ('system', 'warning', 'Firmware REST insert test', false);
+  BEGIN INSERT INTO public.notifications (type, level, message, is_read) VALUES ('system', 'warning', 'Read notification rejected', true);
+    RAISE EXCEPTION 'anon inserted an already-read notification';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END $$;
+ROLLBACK;
+'@ | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Health/notification RLS behavior checks failed' }
   & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\deferred_migrations\20261113007000_machine_settings_device_rpc.sql') | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Machine settings hardening migration failed' }
   & $psql @pgArgs -f (Join-Path $repoRoot 'supabase\deferred_migrations\20261113008000_authenticated_slots_device_rpc.sql') | Out-Null
@@ -281,9 +405,9 @@ SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
 DO $$ DECLARE row_count integer; BEGIN
   SELECT count(*) INTO row_count FROM public.machine_health_logs;
-  IF row_count <> 1 THEN RAISE EXCEPTION 'profile cannot read device health logs'; END IF;
+  IF row_count <> 2 THEN RAISE EXCEPTION 'profile cannot read device health logs'; END IF;
   SELECT count(*) INTO row_count FROM public.notifications;
-  IF row_count <> 1 THEN RAISE EXCEPTION 'profile cannot read device notifications'; END IF;
+  IF row_count <> 2 THEN RAISE EXCEPTION 'profile cannot read device notifications'; END IF;
   INSERT INTO public.notifications (type, level, message) VALUES ('gcash', 'info', 'dashboard notification');
   UPDATE public.notifications SET is_read = true WHERE message = 'dashboard notification';
   IF NOT FOUND THEN RAISE EXCEPTION 'profile cannot mark notification read'; END IF;

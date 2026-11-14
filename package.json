@@ -7,6 +7,7 @@
     "firmware:configure": "node scripts/firmware-configure.mjs",
     "firmware:check": "node scripts/firmware-check.mjs",
     "test:coin-reset": "node scripts/test-coin-reset.mjs",
+    "test:csv": "node scripts/test-csv.mjs",
     "test:coin-reset-db": "pwsh -NoProfile -File scripts/test-coin-reset-db.ps1",
     "test:profile-role-boundary": "pwsh -NoProfile -File scripts/test-profile-role-boundary.ps1",
     "test:restock-db": "pwsh -NoProfile -File scripts/test-restock-slot-db.ps1",
@@ -14,8 +15,9 @@
     "test:operational-reads-db": "pwsh -NoProfile -File scripts/test-operational-reads-rls.ps1",
     "test:machine-config-db": "pwsh -NoProfile -File scripts/test-machine-config-db.ps1",
     "test:machine-slots-db": "pwsh -NoProfile -File scripts/test-machine-slots-db.ps1",
+    "test:setup-bundle-db": "pwsh -NoProfile -File scripts/test-one-time-setup.ps1",
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -28,12 +30,8 @@
     "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
     "oxlint": "^1.79.0",
-    "typescript": "~6.0.2",
     "vite": "^8.2.2"
   }
 }

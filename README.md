@@ -1,5 +1,5 @@
 # 🌸 4Peace — IoT-Based Smart Feminine Hygiene Access System
-### Modern Admin Dashboard & Firmware Interface (React 19 + TypeScript + Supabase)
+### Modern Admin Dashboard & Firmware Interface (React 19 + JavaScript/JSX + Supabase)
 
 > **Team 4Peace** · Veritas College of Irosin  
 > An automated, accessible, and IoT-connected dispensing solution engineered to provide reliable access to feminine hygiene products with real-time telemetry, dual-payment processing (Coins & GCash), and remote administrative monitoring.
@@ -70,7 +70,7 @@ The 4Peace system bridges physical automated dispensing hardware with a high-per
                  ▼ Realtime REST API
      ┌────────────────────────────────────────────────────────┐
      │               4PEACE REACT WEB DASHBOARD               │
-     │     Vite + React 19 + TypeScript + Custom Theme        │
+     │     Vite + React 19 + JavaScript/JSX + Custom Theme        │
      └────────────────────────────────────────────────────────┘
 ```
 
@@ -172,49 +172,48 @@ Additional device tables: `device_resource_logs` (minute-level resource and CPU 
 
 ## 💻 Frontend Architecture & Component Tree
 
-Built with **React 19**, **TypeScript**, **Vite**, and an embedded **Custom Design System**:
+Built with **React 19**, **JavaScript/JSX**, **Vite**, and an embedded **Custom Design System**:
 
 ```
 react-app/
 ├── .env                                    # Supabase connection credentials
 ├── index.html                              # Web entry point & Google Fonts
 ├── package.json                            # Scripts & dependencies
-├── tsconfig.json                           # TypeScript configuration
-├── vite.config.ts                          # Vite build bundler configuration
+├── vite.config.js                          # Vite build bundler configuration
 ├── supabase/
 │   └── migrations/
 │       ├── 001_initial_schema.sql          # Base PostgreSQL schema + table definitions
 │       └── 002_mock_data.sql               # Comprehensive seed data for testing
 └── src/
-    ├── main.tsx                            # Root application bootstrap
-    ├── App.tsx                             # Router setup with AuthGuard & ToastProvider
+    ├── main.jsx                            # Root application bootstrap
+    ├── App.jsx                             # Router setup with AuthGuard & ToastProvider
     ├── index.css                           # Full theme stylesheet & dark styling
     ├── utils/
-    │   ├── supabase.ts                     # Supabase client singleton
-    │   └── helpers.ts                      # Time formatting, calculations, CSV export
+    │   ├── supabase.js                     # Supabase client singleton
+    │   └── helpers.js                      # Time formatting, calculations, CSV export
     ├── hooks/
-    │   └── useAuth.tsx                     # Authentication context & session persistence
+    │   └── useAuth.jsx                     # Authentication context & session persistence
     ├── components/
-    │   ├── AuthGuard.tsx                   # Route protection wrapper
-    │   ├── Sidebar.tsx                     # Navigation bar with dynamic badge counter
-    │   ├── Topbar.tsx                      # Header displaying active view & sync pill
-    │   ├── StatCard.tsx                    # Overview metric cards with delta indicators
-    │   ├── SlotTag.tsx                     # Dynamic status badge (ok/low/empty/pending)
-    │   ├── Switch.tsx                      # Toggle switch component for settings
-    │   ├── Toast.tsx                       # Global toast notification provider
-    │   └── Esp32PinStatusModal.tsx          # Per-pin live diagnostics panel
+    │   ├── AuthGuard.jsx                   # Route protection wrapper
+    │   ├── Sidebar.jsx                     # Navigation bar with dynamic badge counter
+    │   ├── Topbar.jsx                      # Header displaying active view & sync pill
+    │   ├── StatCard.jsx                    # Overview metric cards with delta indicators
+    │   ├── SlotTag.jsx                     # Dynamic status badge (ok/low/empty/pending)
+    │   ├── Switch.jsx                      # Toggle switch component for settings
+    │   ├── Toast.jsx                       # Global toast notification provider
+    │   └── Esp32PinStatusModal.jsx          # Per-pin live diagnostics panel
     ├── pages/
-    │   ├── LoginPage.tsx                   # Secure administrative login screen
-    │   └── DashboardPage.tsx               # Main layout container & view switcher
+    │   ├── LoginPage.jsx                   # Secure administrative login screen
+    │   └── DashboardPage.jsx               # Main layout container & view switcher
     └── views/
-        ├── OverviewView.tsx                # High-level KPIs, low stock table, recent feed
-        ├── SlotsView.tsx                   # Interactive rack schematic & inventory table
-        ├── TransactionsView.tsx            # GCash approval cards, history, & CSV export
-        ├── HealthView.tsx                  # Hardware diagnostics & CPU-temperature history
-        ├── Esp32LogsView.tsx               # Server-timestamped ESP32 event stream
-        ├── NotificationsView.tsx           # Full notification history & mark-all-read
-        ├── SmsLogsView.tsx                 # GSM/SMS message history
-        └── SettingsView.tsx                # Slot editor, admin profile & machine controls
+        ├── OverviewView.jsx                # High-level KPIs, low stock table, recent feed
+        ├── SlotsView.jsx                   # Interactive rack schematic & inventory table
+        ├── TransactionsView.jsx            # GCash approval cards, history, & CSV export
+        ├── HealthView.jsx                  # Hardware diagnostics & CPU-temperature history
+        ├── Esp32LogsView.jsx               # Server-timestamped ESP32 event stream
+        ├── NotificationsView.jsx           # Full notification history & mark-all-read
+        ├── SmsLogsView.jsx                 # GSM/SMS message history
+        └── SettingsView.jsx                # Slot editor, admin profile & machine controls
 ```
 
 ---
@@ -406,4 +405,4 @@ Flash `firmware/4peace_esp32_firmware` and open Serial Monitor at **115200 baud*
 
 - **Project:** 4Peace — IoT-Based Smart Feminine Hygiene Access System
 - **Institution:** Veritas College of Irosin
-- **Development Stack:** ESP32 · SIM800L · Supabase · React 19 · TypeScript · Vite
+- **Development Stack:** ESP32 · SIM800L · Supabase · React 19 · JavaScript/JSX · Vite

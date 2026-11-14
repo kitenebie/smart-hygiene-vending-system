@@ -1,0 +1,113 @@
+import { useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import Sidebar from '../components/Sidebar';
+import Topbar from '../components/Topbar';
+import OverviewView from '../views/OverviewView';
+import SlotsView from '../views/SlotsView';
+import TransactionsView from '../views/TransactionsView';
+import HealthView from '../views/HealthView';
+import NotificationsView from '../views/NotificationsView';
+import SmsLogsView from '../views/SmsLogsView';
+import Esp32LogsView from '../views/Esp32LogsView';
+import SettingsView from '../views/SettingsView';
+import { supabase } from '../utils/supabase';
+import { usePolling } from '../hooks/usePolling';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
+const titles = {
+    overview: ['Overview', 'Snapshot of the machine right now'],
+    slots: ['Slots & Inventory', 'Live stock levels for every dispensing slot'],
+    transactions: ['Transactions', 'GCash and coin payments confirmed by the machine'],
+    health: ['Device Health', 'Real-time sensor and power diagnostics'],
+    notifications: ['Notifications', 'Stock, coin box, tamper, GCash and system alerts'],
+    sms_logs: ['SMS Logs', 'Real-time queue and delivery history for the admin phone number'],
+    esp32_logs: ['ESP32 Logs', 'Live machine activity saved by the ESP32'],
+    settings: ['Settings', 'Your account and machine configuration'],
+};
+export default function DashboardPage() {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [legacyEsp32LastSeen, setLegacyEsp32LastSeen] = useState(null);
+    const [heartbeatLastSeen, setHeartbeatLastSeen] = useState(null);
+    const [heartbeatAvailable, setHeartbeatAvailable] = useState(false);
+    const requestedView = searchParams.get('view');
+    const activeView = requestedView && requestedView in titles
+        ? requestedView
+        : 'overview';
+    const setActiveView = (view) => {
+        setSearchParams(view === 'overview' ? {} : { view });
+    };
+    usePolling(loadBadge, 20000);
+    // A fresh health sync or PIN-diagnostic sync both prove that the ESP32 is
+    // communicating with Supabase. Polling also marks it waiting when stale.
+    usePolling(loadEsp32Status, 15000);
+    useRealtimeRefresh(['notifications'], loadBadge);
+    useRealtimeRefresh(['device_health', 'esp32_pin_status', 'esp32_device_presence'], loadEsp32Status);
+    async function loadBadge() {
+        const { data } = await supabase
+            .from('notifications')
+            .select('id')
+            .eq('is_read', false);
+        setUnreadCount(data?.length ?? 0);
+    }
+    async function loadEsp32Status() {
+        const [healthResult, heartbeatResult, pinStatusResult] = await Promise.all([
+            supabase
+                .from('device_health')
+                .select('last_sync')
+                .order('id', { ascending: false })
+                .limit(1)
+                .maybeSingle(),
+            supabase
+                .from('esp32_device_presence')
+                .select('last_seen')
+                .eq('machine_id', 'VM001')
+                .maybeSingle(),
+            supabase
+                .from('esp32_pin_status')
+                .select('updated_at')
+                .eq('machine_id', 'VM001')
+                .order('updated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle(),
+        ]);
+        const timestamps = [healthResult.data?.last_sync, pinStatusResult.data?.updated_at]
+            .filter((timestamp) => Boolean(timestamp));
+        const newestTimestamp = timestamps.reduce((latest, timestamp) => {
+            if (!latest || new Date(timestamp).getTime() > new Date(latest).getTime())
+                return timestamp;
+            return latest;
+        }, null);
+        setLegacyEsp32LastSeen(newestTimestamp);
+        // Once its migration is applied, the heartbeat is the authoritative
+        // presence signal. Until then, keep the old telemetry/PIN fallback.
+        if (!heartbeatResult.error) {
+            setHeartbeatAvailable(true);
+            setHeartbeatLastSeen(heartbeatResult.data?.last_seen ?? null);
+        }
+    }
+    const handleUnreadChange = useCallback((count) => {
+        setUnreadCount(count);
+        // refresh badge after mark-all-read too
+    }, []);
+    const [title, subtitle] = titles[activeView];
+    const esp32LastSeen = heartbeatAvailable ? heartbeatLastSeen : legacyEsp32LastSeen;
+    const presenceTimeoutMs = heartbeatAvailable ? 25000 : 150000;
+    const esp32Connected = esp32LastSeen !== null &&
+        Date.now() - new Date(esp32LastSeen).getTime() < presenceTimeoutMs;
+    return (<div className="app">
+      <Sidebar activeView={activeView} onNav={setActiveView} unreadCount={unreadCount}/>
+      <main className="main">
+        <Topbar title={title} subtitle={subtitle} esp32Connected={esp32Connected} lastSync={esp32LastSeen}/>
+        <div className="content">
+          {activeView === 'overview' && <OverviewView />}
+          {activeView === 'slots' && <SlotsView />}
+          {activeView === 'transactions' && <TransactionsView />}
+          {activeView === 'health' && <HealthView />}
+          {activeView === 'notifications' && <NotificationsView onUnreadChange={handleUnreadChange}/>}
+          {activeView === 'sms_logs' && <SmsLogsView />}
+          {activeView === 'esp32_logs' && <Esp32LogsView />}
+          {activeView === 'settings' && <SettingsView />}
+        </div>
+      </main>
+    </div>);
+}

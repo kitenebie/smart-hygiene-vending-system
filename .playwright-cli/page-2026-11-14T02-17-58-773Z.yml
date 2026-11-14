@@ -1,0 +1,18 @@
+- generic [ref=f2e4]:
+  - generic [ref=f2e5]:
+    - generic [ref=f2e6]: 4P
+    - generic [ref=f2e7]:
+      - generic [ref=f2e8]: 4Peace
+      - generic [ref=f2e9]: MACHINE ADMIN
+  - heading "Welcome back" [level=1] [ref=f2e10]
+  - paragraph [ref=f2e11]: Log in to manage slots, transactions, and machine settings.
+  - generic [ref=f2e12]:
+    - generic [ref=f2e13]: Email
+    - textbox "Email" [active] [ref=f2e14]:
+      - /placeholder: admin@example.com
+      - text: not-an-email
+    - generic [ref=f2e15]: Password
+    - textbox "Password" [ref=f2e16]:
+      - /placeholder: ••••••••
+    - button "Log in" [ref=f2e17] [cursor=pointer]
+  - generic [ref=f2e18]: Team 4Peace · Veritas College of Irosin
