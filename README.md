@@ -235,7 +235,7 @@ react-app/
 ## 🚀 Installation & Setup Guide
 
 ### 1. Clone & Install Dependencies
-Ensure you have **Node.js (v18+)** installed.
+Ensure you have **Node.js 20.19+ or 22.12+** installed (required by Vite 8).
 
 ```powershell
 # Navigate into the React application directory
@@ -258,13 +258,25 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_DRZfiimKuXLYdLvE-7iVxQ_yZLMr2OS
 2. The complete [`ONE_TIME_SETUP.sql`](supabase/ONE_TIME_SETUP.sql) file includes the current legacy data and schema migrations. It does not drop tables or overwrite conflicting rows.
 3. Use it only in development/staging until the legacy migrations' RLS-disabled tables receive reviewed access policies. For an exact legacy snapshot, use a new/empty database; existing rows with matching keys are intentionally retained. Do not clear production tables to force a match.
 
-### 4. Run Development Server
+### 4. Deploy the Admin Edge Functions
+The React login checks credentials in the private `admins` table. Deploy both functions from the project root with the Supabase CLI after applying the SQL setup:
+
+```powershell
+supabase login
+supabase link --project-ref fjexweubnccjrinhxrct
+supabase functions deploy admin-login
+supabase functions deploy admin-profile-update
+```
+
+The functions use Supabase's server-side service-role environment variable. Never add that key to `.env` or Vite client code.
+
+### 5. Run Development Server
 ```powershell
 npm run dev
 ```
 Open **`http://127.0.0.1:4173`** in your browser.
 
-### 5. Build for Production
+### 6. Build for Production
 ```powershell
 npm run build
 ```

@@ -8399,3 +8399,254 @@ CREATE POLICY "machine settings: update profile"
   ));
 
 NOTIFY pgrst, 'reload schema';
+
+
+-- ===== 20261114001000_slots_firmware_compatible_rls.sql =====
+
+-- Keep the firmware's public slot GET working while moving slot writes behind
+-- profile authorization and the existing restock/vend RPCs.
+ALTER TABLE public.slots ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.slots FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.slots TO anon, authenticated;
+GRANT UPDATE (product_name, capacity) ON TABLE public.slots TO authenticated;
+
+DROP POLICY IF EXISTS "slots: firmware read" ON public.slots;
+CREATE POLICY "slots: firmware read"
+  ON public.slots FOR SELECT TO anon USING (true);
+
+DROP POLICY IF EXISTS "slots: read profile" ON public.slots;
+CREATE POLICY "slots: read profile"
+  ON public.slots FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role IN ('Administrator', 'Machine Technician')
+  ));
+
+DROP POLICY IF EXISTS "slots: update product profile" ON public.slots;
+CREATE POLICY "slots: update product profile"
+  ON public.slots FOR UPDATE TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role IN ('Administrator', 'Machine Technician')
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role IN ('Administrator', 'Machine Technician')
+  ));
+
+NOTIFY pgrst, 'reload schema';
+
+
+-- ===== 20261114002000_hash_legacy_admin_passwords.sql =====
+
+-- Hash legacy plaintext credentials in place without copying them into Auth.
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
+DO $$
+DECLARE
+  crypto_schema text;
+BEGIN
+  SELECT n.nspname INTO crypto_schema
+  FROM pg_extension e
+  JOIN pg_namespace n ON n.oid = e.extnamespace
+  WHERE e.extname = 'pgcrypto';
+
+  IF crypto_schema IS NULL THEN
+    RAISE EXCEPTION 'pgcrypto is required to hash legacy admin credentials';
+  END IF;
+
+  EXECUTE format(
+    'UPDATE public.admins
+     SET password_hash = %1$I.crypt(password_hash, %1$I.gen_salt(''bf'', 12))
+     WHERE password_hash !~ %2$L
+       AND password_hash !~ %3$L
+       AND password_hash !~ %4$L',
+    crypto_schema,
+    '^\$',
+    '^\*[0-9A-Fa-f]{40}$',
+    '^([A-Fa-f0-9]{32}|[A-Fa-f0-9]{40}|[A-Fa-f0-9]{64}|[A-Fa-f0-9]{96}|[A-Fa-f0-9]{128})$'
+  );
+END;
+$$;
+
+
+-- ===== 20261114003000_legacy_admin_login.sql =====
+
+-- Verify legacy admin credentials server-side and throttle failed login attempts.
+CREATE TABLE IF NOT EXISTS public.admin_login_attempts (
+  client_ip TEXT PRIMARY KEY CHECK (length(client_ip) BETWEEN 1 AND 80),
+  window_started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  attempts INTEGER NOT NULL DEFAULT 0
+);
+
+ALTER TABLE public.admin_login_attempts ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.admin_login_attempts FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.verify_legacy_admin_login(
+  p_email TEXT,
+  p_password TEXT,
+  p_client_ip TEXT
+)
+RETURNS TABLE (username TEXT, full_name TEXT, phone TEXT, email TEXT, role TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_crypto_schema TEXT;
+  v_admin public.admins%ROWTYPE;
+  v_attempts INTEGER;
+BEGIN
+  IF p_email IS NULL OR p_password IS NULL OR p_client_ip IS NULL
+     OR length(p_client_ip) NOT BETWEEN 1 AND 80 THEN
+    RETURN;
+  END IF;
+
+  DELETE FROM public.admin_login_attempts
+  WHERE window_started_at < now() - INTERVAL '1 day';
+
+  INSERT INTO public.admin_login_attempts AS current_attempts (client_ip, window_started_at, attempts)
+  VALUES (p_client_ip, now(), 1)
+  ON CONFLICT (client_ip) DO UPDATE
+  SET window_started_at = CASE
+        WHEN current_attempts.window_started_at < now() - INTERVAL '15 minutes' THEN now()
+        ELSE current_attempts.window_started_at
+      END,
+      attempts = CASE
+        WHEN current_attempts.window_started_at < now() - INTERVAL '15 minutes' THEN 1
+        ELSE current_attempts.attempts + 1
+      END
+  RETURNING attempts INTO v_attempts;
+
+  IF v_attempts > 5 THEN
+    RETURN;
+  END IF;
+
+  SELECT n.nspname INTO v_crypto_schema
+  FROM pg_catalog.pg_extension e
+  JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
+  WHERE e.extname = 'pgcrypto';
+
+  IF v_crypto_schema IS NULL THEN
+    RAISE EXCEPTION 'pgcrypto is required to verify legacy admin credentials';
+  END IF;
+
+  EXECUTE format(
+    'SELECT a.* FROM public.admins a
+     WHERE lower(a.email) = lower($2)
+       AND a.role IN (''Administrator'', ''Machine Technician'')
+       AND %1$I.crypt($1, CASE WHEN left(a.password_hash, 4) = ''$2y$''
+                               THEN ''$2a$'' || substr(a.password_hash, 5)
+                               ELSE a.password_hash END)
+           = CASE WHEN left(a.password_hash, 4) = ''$2y$''
+                  THEN ''$2a$'' || substr(a.password_hash, 5)
+                  ELSE a.password_hash END',
+    v_crypto_schema
+  ) INTO v_admin USING p_password, p_email;
+
+  IF v_admin.id IS NULL THEN
+    RETURN;
+  END IF;
+
+  DELETE FROM public.admin_login_attempts WHERE client_ip = p_client_ip;
+  username := v_admin.username;
+  full_name := v_admin.full_name;
+  phone := v_admin.phone;
+  email := v_admin.email;
+  role := v_admin.role;
+  RETURN NEXT;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.verify_legacy_admin_login(TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.verify_legacy_admin_login(TEXT, TEXT, TEXT) TO service_role;
+
+
+-- ===== 20261114004000_legacy_admin_profile_update.sql =====
+
+-- Keep profile changes and legacy login credentials in sync through the Edge Function.
+CREATE OR REPLACE FUNCTION public.get_legacy_admin_profile(p_user_id UUID)
+RETURNS TABLE (id UUID, username TEXT, full_name TEXT, phone TEXT, email TEXT, role TEXT)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT p.id, a.username::TEXT, a.full_name::TEXT, a.phone::TEXT, a.email::TEXT, a.role::TEXT
+  FROM public.profiles p
+  JOIN auth.users u ON u.id = p.id
+  JOIN public.admins a ON lower(a.email) = lower(u.email)
+  WHERE p.id = p_user_id AND p.role = 'Administrator'
+$$;
+
+CREATE OR REPLACE FUNCTION public.update_legacy_admin_profile(
+  p_user_id UUID,
+  p_previous_email TEXT,
+  p_email TEXT,
+  p_username TEXT,
+  p_full_name TEXT,
+  p_phone TEXT,
+  p_password TEXT DEFAULT NULL
+)
+RETURNS TABLE (id UUID, username TEXT, full_name TEXT, phone TEXT, email TEXT, role TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_admin_id INTEGER;
+  v_matches INTEGER;
+  v_crypto_schema TEXT;
+BEGIN
+  IF p_email IS NULL OR length(p_email) > 150 OR p_username IS NULL
+     OR char_length(btrim(p_username)) NOT BETWEEN 1 AND 50
+     OR p_full_name IS NULL OR length(p_full_name) > 100
+     OR length(coalesce(p_phone, '')) > 20
+     OR octet_length(coalesce(p_password, '')) > 72 THEN
+    RETURN;
+  END IF;
+
+  SELECT count(*), min(a.id) INTO v_matches, v_admin_id
+  FROM public.admins a
+  JOIN auth.users u ON lower(u.email) = lower(p_email)
+  JOIN public.profiles p ON p.id = u.id
+  WHERE p.id = p_user_id AND p.role = 'Administrator'
+    AND lower(a.email) = lower(p_previous_email);
+
+  IF v_matches <> 1 OR EXISTS (
+    SELECT 1 FROM public.admins a
+    WHERE a.id <> v_admin_id AND lower(a.email) = lower(p_email)
+  ) THEN
+    RETURN;
+  END IF;
+
+  SELECT n.nspname INTO v_crypto_schema
+  FROM pg_catalog.pg_extension e
+  JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
+  WHERE e.extname = 'pgcrypto';
+  IF v_crypto_schema IS NULL THEN
+    RAISE EXCEPTION 'pgcrypto is required to update legacy admin credentials';
+  END IF;
+
+  EXECUTE format(
+    'UPDATE public.admins SET username = $1, full_name = $2, email = $3, phone = $4,
+       password_hash = CASE WHEN $5 IS NULL THEN password_hash
+                            ELSE %1$I.crypt($5, %1$I.gen_salt(''bf'', 12)) END
+     WHERE id = $6',
+    v_crypto_schema
+  ) USING p_username, p_full_name, p_email, p_phone, p_password, v_admin_id;
+
+  UPDATE public.profiles SET username = p_username, full_name = p_full_name, phone = p_phone
+  WHERE profiles.id = p_user_id;
+
+  RETURN QUERY
+  SELECT p.id, a.username::TEXT, a.full_name::TEXT, a.phone::TEXT, a.email::TEXT, a.role::TEXT
+  FROM public.profiles p JOIN public.admins a ON a.id = v_admin_id
+  WHERE p.id = p_user_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_legacy_admin_profile(UUID) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.update_legacy_admin_profile(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_legacy_admin_profile(UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION public.update_legacy_admin_profile(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO service_role;

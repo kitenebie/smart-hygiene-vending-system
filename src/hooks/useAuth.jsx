@@ -26,9 +26,14 @@ export function AuthProvider({ children }) {
         return () => { mounted = false; subscription.unsubscribe(); };
     }, []);
     const login = async (email, password) => {
-        const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-        if (error || !data.user)
+        const { data: loginData, error: loginError } = await supabase.functions.invoke('admin-login', {
+            body: { email: email.trim(), password },
+        });
+        if (loginError || !loginData?.token_hash)
             return { success: false, error: 'Invalid email or password.' };
+        const { data, error } = await supabase.auth.verifyOtp({ token_hash: loginData.token_hash, type: 'magiclink' });
+        if (error || !data.user)
+            return { success: false, error: 'Unable to create a secure session. Try again.' };
         const profile = await loadProfile(data.user.id, data.user.email);
         if (!profile) {
             await supabase.auth.signOut();

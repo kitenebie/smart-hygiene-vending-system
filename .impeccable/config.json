@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "fraunces",
+        "createdAt": "2026-11-14T05:53:45.225Z",
+        "reason": "Agent: incumbent CSS assigns Fraunces to brand, page and section titles, and KPI values; body and data use Work Sans and JetBrains Mono."
+      }
+    ]
+  }
+}

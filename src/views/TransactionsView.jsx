@@ -63,14 +63,19 @@ export default function TransactionsView() {
                 await loadAll();
                 return;
             }
-            await supabase.from('notifications').insert({
+            const { error: notificationError } = await supabase.from('notifications').insert({
                 type: 'gcash',
                 level: action === 'approve' ? 'info' : 'warning',
                 message: action === 'approve'
                     ? `GCash reference ${maskPaymentReference(payment.ref_code)} approved — dispense allowed`
                     : `GCash reference ${maskPaymentReference(payment.ref_code)} rejected — no matching SMS found`,
             });
-            showToast(action === 'approve' ? 'GCash reference approved.' : 'GCash reference rejected.');
+            if (notificationError) {
+                showToast('Payment resolved, but its notification could not be saved.', true);
+            }
+            else {
+                showToast(action === 'approve' ? 'GCash reference approved.' : 'GCash reference rejected.');
+            }
             loadAll();
         }
         catch {

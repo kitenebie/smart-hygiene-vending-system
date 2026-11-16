@@ -16,6 +16,7 @@
     "test:machine-config-db": "pwsh -NoProfile -File scripts/test-machine-config-db.ps1",
     "test:machine-slots-db": "pwsh -NoProfile -File scripts/test-machine-slots-db.ps1",
     "test:setup-bundle-db": "pwsh -NoProfile -File scripts/test-one-time-setup.ps1",
+    "test:edge-functions": "deno test --allow-read --allow-env --allow-net=registry.npmjs.org supabase/functions/tests/auth_test.js",
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
@@ -32,6 +33,6 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.0",
     "oxlint": "^1.79.0",
-    "vite": "^8.2.2"
+    "vite": "^8.3.8"
   }
 }

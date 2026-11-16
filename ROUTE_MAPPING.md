@@ -12,4 +12,4 @@
 | `?view=esp32_logs` | `/?view=esp32_logs` | `Esp32LogsView` |
 | `?view=settings` | `/?view=settings` | `SettingsView` |
 
-Legacy API paths are not routes in React. Their recovered behavior maps to Supabase queries/RPCs. `app.js` references 21 distinct PHP API endpoints, and the `index.php` CSV link adds `api/transactions_export.php`: 22 referenced paths total, with only 3 handler files present. The missing export handler maps to the client-side `TransactionsView` CSV action; exact row, filter, and formatting parity is unverified.
+Legacy API paths are not routes in React. `Php_Version/assets/js/app.js` references 21 distinct PHP API endpoints, and `Php_Version/index.php` adds `api/transactions_export.php`: 22 paths total, with 3 handlers present and 19 absent inside `Php_Version`. The parent project has 11 overlapping handlers from an older 8-table, 6-view app; do not treat them as the missing target-version handlers. The React CSV action exists, but exact export row/column parity remains unverified.

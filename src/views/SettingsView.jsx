@@ -175,43 +175,30 @@ export default function SettingsView() {
     async function saveProfile() {
         if (!profile)
             return;
-        const updates = {
-            full_name: profFullName.trim(),
-            username: profUsername.trim(),
-            phone: profPhone.trim(),
-        };
-        if (profPassword) {
-            const { error } = await supabase.auth.updateUser({ password: profPassword });
-            if (error) {
-                showToast('Could not update password.', true);
-                return;
-            }
-        }
-        if (profEmail.trim() !== admin?.email) {
-            const { error } = await supabase.auth.updateUser({ email: profEmail.trim() });
-            if (error) {
-                showToast('Could not update email.', true);
-                return;
-            }
-        }
-        const { error } = await supabase
-            .from('profiles')
-            .update(updates)
-            .eq('id', profile.id);
-        if (error) {
-            showToast('Could not save profile.', true);
+        const { data, error } = await supabase.functions.invoke('admin-profile-update', {
+            body: {
+                full_name: profFullName.trim(),
+                username: profUsername.trim(),
+                email: profEmail.trim(),
+                phone: profPhone.trim(),
+                password: profPassword || null,
+            },
+        });
+        if (error || !data?.profile) {
+            showToast(data?.error || 'Could not save profile.', true);
             return;
         }
-        updateAdminState({
-            ...profile,
-            full_name: profFullName.trim(),
-            username: profUsername.trim(),
-            email: profEmail.trim(),
-            phone: profPhone.trim(),
-        });
+        const updatedProfile = data.profile;
+        setProfile(current => ({ ...current, ...updatedProfile }));
+        updateAdminState({ ...admin, ...updatedProfile });
+        if (profEmail.trim() !== admin?.email)
+            await supabase.auth.refreshSession();
         showToast('Profile updated.');
+        setProfFullName(updatedProfile.full_name);
+        setProfUsername(updatedProfile.username);
+        setProfEmail(updatedProfile.email);
+        setProfPhone(updatedProfile.phone ?? '');
         setProfPassword('');
-        loadProfile();
     }
     return (<div>
       {/* Products per slot */}
